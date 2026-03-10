@@ -8,8 +8,18 @@ import { accountAgent } from "./agents/account";
 import { supportWorkflow } from "./workflows/support-workflow";
 
 export const mastra = new Mastra({
-  agents: { triageAgent, billingAgent, technicalAgent, accountAgent },
-  workflows: { supportWorkflow },
-  storage: new LibSQLStore({ id: "support-agent-storage", url: ":memory:" }),
+  agents: {
+    triageAgent,
+    billingAgent,
+    technicalAgent,
+    accountAgent,
+  },
+  workflows: {
+    supportWorkflow,
+  },
+  storage: new LibSQLStore({
+    id: "support-agent-storage",
+    url: ":memory:",
+  }),
   logger: new PinoLogger({ name: "support-system", level: "info" }),
 });

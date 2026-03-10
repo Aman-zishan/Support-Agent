@@ -9,8 +9,13 @@ import { processRefundTool } from "../tools";
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
 const workflowInputSchema = z.object({
-  ticketContent: z.string().min(10).max(5000),
-  customerId: z.string(),
+  ticketContent: z
+    .string()
+    .min(10, "Ticket must be at least 10 characters")
+    .max(5000, "Ticket must be at most 5000 characters"),
+  customerId: z
+    .string()
+    .regex(/^C\d{3,}$/, "Customer ID must match format C001"),
 });
 
 const triageOutputSchema = z.object({
@@ -29,12 +34,109 @@ const specialistOutputSchema = z.object({
   reason: z.string(),
 });
 
+// ─── Step 0: Validate Ticket (Guardrails) ────────────────────────────────────
+
+const validateTicketStep = createStep({
+  id: "validate-ticket",
+  description: "Validate input and detect prompt injection / PII",
+  inputSchema: workflowInputSchema,
+  outputSchema: z.object({
+    ticketContent: z.string(),
+    customerId: z.string(),
+    valid: z.boolean(),
+    rejectionReason: z.string().optional(),
+    piiDetected: z.boolean(),
+  }),
+  execute: async ({ inputData }) => {
+    const { ticketContent, customerId } = inputData;
+
+    // Length validation
+    if (ticketContent.length < 10 || ticketContent.length > 5000) {
+      return {
+        ticketContent,
+        customerId,
+        valid: false,
+        rejectionReason: `Ticket length invalid: ${ticketContent.length} characters. Must be 10-5000.`,
+        piiDetected: false,
+      };
+    }
+
+    // Customer ID format check
+    if (!/^C\d{3,}$/.test(customerId)) {
+      return {
+        ticketContent,
+        customerId,
+        valid: false,
+        rejectionReason: `Invalid customer ID format: ${customerId}. Expected format: C001`,
+        piiDetected: false,
+      };
+    }
+
+    // Prompt injection detection
+    const injectionPatterns = [
+      /ignore\s+(previous|all|above)\s+instructions/i,
+      /you\s+are\s+now\s+a/i,
+      /forget\s+(everything|all|previous)/i,
+      /new\s+instructions?:/i,
+      /system\s+prompt/i,
+      /\[INST\]/i,
+      /<<SYS>>/i,
+      /approve\s+all\s+refunds/i,
+    ];
+
+    const injectionDetected = injectionPatterns.some((pattern) =>
+      pattern.test(ticketContent)
+    );
+
+    if (injectionDetected) {
+      return {
+        ticketContent,
+        customerId,
+        valid: false,
+        rejectionReason:
+          "Security: Potential prompt injection detected. Ticket rejected.",
+        piiDetected: false,
+      };
+    }
+
+    // PII detection (log but don't block)
+    const piiPatterns = [
+      /\b\d{3}-\d{2}-\d{4}\b/, // SSN
+      /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/, // Credit card
+      /\b\d{3}[\s-]?\d{3}[\s-]?\d{4}\b/, // Phone
+    ];
+
+    const piiDetected = piiPatterns.some((pattern) =>
+      pattern.test(ticketContent)
+    );
+
+    if (piiDetected) {
+      console.warn(
+        `[SECURITY] PII detected in ticket for customer ${customerId}`
+      );
+    }
+
+    return {
+      ticketContent,
+      customerId,
+      valid: true,
+      piiDetected,
+    };
+  },
+});
+
 // ─── Step 1: Triage ───────────────────────────────────────────────────────────
 
 const triageStep = createStep({
   id: "triage",
   description: "Classify the support ticket using the triage agent",
-  inputSchema: workflowInputSchema,
+  inputSchema: z.object({
+    ticketContent: z.string(),
+    customerId: z.string(),
+    valid: z.boolean(),
+    rejectionReason: z.string().optional(),
+    piiDetected: z.boolean(),
+  }),
   outputSchema: z.object({
     category: z.enum(["billing", "technical", "account"]),
     priority: z.enum(["low", "medium", "high", "urgent"]),
@@ -42,8 +144,24 @@ const triageStep = createStep({
     reasoning: z.string(),
     ticketContent: z.string(),
     customerId: z.string(),
+    valid: z.boolean(),
+    rejectionReason: z.string().optional(),
   }),
   execute: async ({ inputData }) => {
+    // Short-circuit if validation failed
+    if (!inputData.valid) {
+      return {
+        category: "billing" as const,
+        priority: "low" as const,
+        summary: "REJECTED",
+        reasoning: inputData.rejectionReason || "Validation failed",
+        ticketContent: inputData.ticketContent,
+        customerId: inputData.customerId,
+        valid: false,
+        rejectionReason: inputData.rejectionReason,
+      };
+    }
+
     const result = await triageAgent.generate(
       `Classify this support ticket for customer ${inputData.customerId}:\n\n${inputData.ticketContent}`,
       { output: "text" }
@@ -51,8 +169,10 @@ const triageStep = createStep({
 
     let parsed: z.infer<typeof triageOutputSchema>;
     try {
-      parsed = JSON.parse(result.text.trim());
+      const text = result.text.trim();
+      parsed = JSON.parse(text);
     } catch {
+      // Fallback if JSON parsing fails
       parsed = {
         category: "billing",
         priority: "medium",
@@ -65,6 +185,7 @@ const triageStep = createStep({
       ...parsed,
       ticketContent: inputData.ticketContent,
       customerId: inputData.customerId,
+      valid: true,
     };
   },
 });
@@ -81,10 +202,18 @@ const specialistStep = createStep({
     reasoning: z.string(),
     ticketContent: z.string(),
     customerId: z.string(),
+    valid: z.boolean(),
+    rejectionReason: z.string().optional(),
   }),
   outputSchema: z.object({
     response: z.string(),
-    action: z.enum(["refund", "escalate", "resolved", "info_needed"]),
+    action: z.enum([
+      "refund",
+      "escalate",
+      "resolved",
+      "info_needed",
+      "rejected",
+    ]),
     refundAmount: z.number().nullable().optional(),
     orderId: z.string().nullable().optional(),
     customerId: z.string(),
@@ -93,6 +222,20 @@ const specialistStep = createStep({
     priority: z.enum(["low", "medium", "high", "urgent"]),
   }),
   execute: async ({ inputData }) => {
+    // Short-circuit if validation failed
+    if (!inputData.valid) {
+      return {
+        response: `Ticket rejected: ${inputData.rejectionReason}`,
+        action: "rejected" as const,
+        refundAmount: null,
+        orderId: null,
+        customerId: inputData.customerId,
+        reason: inputData.rejectionReason || "Validation failed",
+        category: inputData.category,
+        priority: inputData.priority,
+      };
+    }
+
     const prompt = `Customer ID: ${inputData.customerId}\nTicket: ${inputData.ticketContent}\nSummary: ${inputData.summary}`;
     let parsed: z.infer<typeof specialistOutputSchema>;
 
@@ -105,10 +248,13 @@ const specialistStep = createStep({
       } else {
         result = await accountAgent.generate(prompt, { output: "text" });
       }
-      parsed = JSON.parse(result.text.trim());
+
+      const text = result.text.trim();
+      parsed = JSON.parse(text);
     } catch (err) {
       parsed = {
-        response: "Specialist agent encountered an error. Escalating to human support.",
+        response:
+          "Specialist agent encountered an error. Escalating to human support.",
         action: "escalate",
         refundAmount: null,
         orderId: null,
@@ -133,7 +279,13 @@ const refundApprovalStep = createStep({
   description: "Human-in-the-loop approval for refunds over $50",
   inputSchema: z.object({
     response: z.string(),
-    action: z.enum(["refund", "escalate", "resolved", "info_needed"]),
+    action: z.enum([
+      "refund",
+      "escalate",
+      "resolved",
+      "info_needed",
+      "rejected",
+    ]),
     refundAmount: z.number().nullable().optional(),
     orderId: z.string().nullable().optional(),
     customerId: z.string(),
@@ -161,10 +313,16 @@ const refundApprovalStep = createStep({
     agentRecommendation: z.string(),
   }),
   execute: async ({ inputData, resumeData, suspend }) => {
-    const { action, refundAmount, orderId, customerId, response, reason } = inputData;
+    const { action, refundAmount, orderId, customerId, response, reason } =
+      inputData;
 
+    // Not a refund action — return as-is
     if (action !== "refund" || !refundAmount || !orderId) {
-      return { finalResponse: response, action, refundProcessed: false };
+      return {
+        finalResponse: response,
+        action,
+        refundProcessed: false,
+      };
     }
 
     // Auto-approve small refunds (<= $50)
@@ -173,8 +331,9 @@ const refundApprovalStep = createStep({
         { orderId, amount: refundAmount, reason },
         undefined
       );
+
       return {
-        finalResponse: `${response}\n\nRefund of $${refundAmount} auto-approved. Refund ID: ${refundResult.refundId}`,
+        finalResponse: `${response}\n\nRefund of $${refundAmount} auto-approved and processed. Refund ID: ${refundResult.refundId}`,
         action: "refund-auto-approved",
         refundProcessed: true,
         refundId: refundResult.refundId,
@@ -191,14 +350,20 @@ const refundApprovalStep = createStep({
         customerId,
         agentRecommendation: reason,
       });
-      return { finalResponse: "Suspended: awaiting manager approval", action: "suspended", refundProcessed: false };
+      // Execution pauses here until resume
+      return {
+        finalResponse: "Suspended: awaiting manager approval",
+        action: "suspended",
+        refundProcessed: false,
+      };
     }
 
+    // Resumed with manager decision
     const { approved, managerNote } = resumeData;
 
     if (!approved) {
       return {
-        finalResponse: `${response}\n\nRefund declined by manager. Note: ${managerNote || "No note provided."}`,
+        finalResponse: `${response}\n\nRefund of $${refundAmount} was declined by manager. Note: ${managerNote || "No note provided."}`,
         action: "refund-declined",
         refundProcessed: false,
         managerApproval: false,
@@ -212,7 +377,7 @@ const refundApprovalStep = createStep({
     );
 
     return {
-      finalResponse: `${response}\n\nRefund of $${refundAmount} approved and processed. Refund ID: ${refundResult.refundId}. Note: ${managerNote || "Approved."}`,
+      finalResponse: `${response}\n\nRefund of $${refundAmount} approved by manager and processed. Refund ID: ${refundResult.refundId}. Note: ${managerNote || "Approved."}`,
       action: "refund-approved",
       refundProcessed: true,
       refundId: refundResult.refundId,
@@ -226,7 +391,8 @@ const refundApprovalStep = createStep({
 
 export const supportWorkflow = createWorkflow({
   id: "customer-support-workflow",
-  description: "Customer support workflow with triage, specialist routing, and HITL",
+  description:
+    "Full customer support escalation workflow with guardrails, triage, specialist routing, and HITL",
   inputSchema: workflowInputSchema,
   outputSchema: z.object({
     finalResponse: z.string(),
@@ -237,6 +403,7 @@ export const supportWorkflow = createWorkflow({
     managerNote: z.string().optional(),
   }),
 })
+  .then(validateTicketStep)
   .then(triageStep)
   .then(specialistStep)
   .then(refundApprovalStep)
