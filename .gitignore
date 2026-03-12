@@ -1,4 +1,10 @@
 node_modules/
 dist/
 .env
+.env.local
 *.js.map
+.mastra/
+.playwright-mcp/
+.claude/
+support.db
+*.png

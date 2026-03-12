@@ -4,7 +4,7 @@ import { triageAgent } from "../agents/triage";
 import { billingAgent } from "../agents/billing";
 import { technicalAgent } from "../agents/technical";
 import { accountAgent } from "../agents/account";
-import { processRefundTool } from "../tools";
+import { processRefund } from "../tools";
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -164,7 +164,7 @@ const triageStep = createStep({
 
     const result = await triageAgent.generate(
       `Classify this support ticket for customer ${inputData.customerId}:\n\n${inputData.ticketContent}`,
-      { output: "text" }
+      {}
     );
 
     let parsed: z.infer<typeof triageOutputSchema>;
@@ -239,18 +239,31 @@ const specialistStep = createStep({
     const prompt = `Customer ID: ${inputData.customerId}\nTicket: ${inputData.ticketContent}\nSummary: ${inputData.summary}`;
     let parsed: z.infer<typeof specialistOutputSchema>;
 
-    try {
+    const generateSpecialist = async () => {
       let result;
       if (inputData.category === "billing") {
-        result = await billingAgent.generate(prompt, { output: "text" });
+        result = await billingAgent.generate(prompt);
       } else if (inputData.category === "technical") {
-        result = await technicalAgent.generate(prompt, { output: "text" });
+        result = await technicalAgent.generate(prompt);
       } else {
-        result = await accountAgent.generate(prompt, { output: "text" });
+        result = await accountAgent.generate(prompt);
       }
+      return JSON.parse(result.text.trim()) as z.infer<
+        typeof specialistOutputSchema
+      >;
+    };
 
-      const text = result.text.trim();
-      parsed = JSON.parse(text);
+    try {
+      parsed = await generateSpecialist();
+
+      // Billing refund requests: if agent didn't return refund data, retry once
+      if (
+        inputData.category === "billing" &&
+        inputData.summary.toLowerCase().includes("refund") &&
+        (!parsed.refundAmount || !parsed.orderId)
+      ) {
+        parsed = await generateSpecialist();
+      }
     } catch (err) {
       parsed = {
         response:
@@ -263,8 +276,15 @@ const specialistStep = createStep({
       };
     }
 
+    // If the agent found a refund amount and order, ensure action is "refund"
+    const action =
+      parsed.refundAmount && parsed.orderId
+        ? ("refund" as const)
+        : parsed.action;
+
     return {
       ...parsed,
+      action,
       customerId: parsed.customerId ?? inputData.customerId,
       category: inputData.category,
       priority: inputData.priority,
@@ -302,7 +322,7 @@ const refundApprovalStep = createStep({
     managerNote: z.string().optional(),
   }),
   resumeSchema: z.object({
-    approved: z.boolean(),
+    approved: z.boolean().optional().default(false),
     managerNote: z.string().optional(),
   }),
   suspendSchema: z.object({
@@ -327,10 +347,11 @@ const refundApprovalStep = createStep({
 
     // Auto-approve small refunds (<= $50)
     if (refundAmount <= 50) {
-      const refundResult = await processRefundTool.execute(
-        { orderId, amount: refundAmount, reason },
-        undefined
-      );
+      const refundResult = await processRefund({
+        orderId,
+        amount: refundAmount,
+        reason,
+      });
 
       return {
         finalResponse: `${response}\n\nRefund of $${refundAmount} auto-approved and processed. Refund ID: ${refundResult.refundId}`,
@@ -371,10 +392,11 @@ const refundApprovalStep = createStep({
       };
     }
 
-    const refundResult = await processRefundTool.execute(
-      { orderId, amount: refundAmount, reason },
-      undefined
-    );
+    const refundResult = await processRefund({
+      orderId,
+      amount: refundAmount,
+      reason,
+    });
 
     return {
       finalResponse: `${response}\n\nRefund of $${refundAmount} approved by manager and processed. Refund ID: ${refundResult.refundId}. Note: ${managerNote || "Approved."}`,

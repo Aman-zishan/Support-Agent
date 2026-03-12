@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { google } from "@ai-sdk/google";
+import { groq } from "@ai-sdk/groq";
 
 export const triageAgent = new Agent({
   id: "triage-agent",
@@ -19,5 +19,5 @@ Respond with JSON only (no markdown, no code blocks):
 Rules:
 - Refund requests are always "high" priority
 - Security concerns are always "urgent"`,
-  model: google("gemini-2.0-flash"),
+  model: groq("llama-3.3-70b-versatile"),
 });

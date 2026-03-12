@@ -114,6 +114,18 @@ export const getOrderHistoryTool = createTool({
   }),
 });
 
+export async function processRefund(input: {
+  orderId: string;
+  amount: number;
+  reason: string;
+}) {
+  return {
+    success: true,
+    refundId: `REF-${Date.now()}`,
+    message: `Refund of $${input.amount} for ${input.orderId}. Reason: ${input.reason}`,
+  };
+}
+
 export const processRefundTool = createTool({
   id: "process-refund",
   description:
@@ -128,9 +140,5 @@ export const processRefundTool = createTool({
     refundId: z.string(),
     message: z.string(),
   }),
-  execute: async (inputData) => ({
-    success: true,
-    refundId: `REF-${Date.now()}`,
-    message: `Refund of $${inputData.amount} for ${inputData.orderId}. Reason: ${inputData.reason}`,
-  }),
+  execute: async (inputData) => processRefund(inputData),
 });

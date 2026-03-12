@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { google } from "@ai-sdk/google";
+import { groq } from "@ai-sdk/groq";
 import { lookupCustomerTool } from "../tools";
 
 export const technicalAgent = new Agent({
@@ -14,6 +14,6 @@ Respond with JSON only (no markdown, no code blocks):
 { "response": "message to customer",
   "action": "resolved"|"escalate"|"info_needed",
   "reason": "why this action was chosen" }`,
-  model: google("gemini-2.0-flash"),
+  model: groq("llama-3.3-70b-versatile"),
   tools: { lookupCustomer: lookupCustomerTool },
 });
