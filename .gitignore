@@ -7,4 +7,11 @@ dist/
 .playwright-mcp/
 .claude/
 support.db
+support.db-shm
+support.db-wal
+*.db-shm
+*.db-wal
+# Ignore screenshots but keep QR codes and presentation assets
 *.png
+!qr-linkedin.png
+!image.png
