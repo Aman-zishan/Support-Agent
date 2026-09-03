@@ -15,3 +15,7 @@ support.db-wal
 *.png
 !qr-linkedin.png
 !image.png
+
+# Business data (regenerated + seeded on first run)
+support-data.db
+support-data.db-*

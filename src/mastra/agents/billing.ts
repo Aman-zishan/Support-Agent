@@ -1,15 +1,20 @@
 import { Agent } from "@mastra/core/agent";
-import { groq } from "@ai-sdk/groq";
+import { supportModel } from "../model";
 import { lookupCustomerTool, getOrderHistoryTool } from "../tools";
 
 export const billingAgent = new Agent({
   id: "billing-agent",
   name: "Billing Agent",
+  description:
+    "Handles billing tickets: invoices, payments, duplicate charges, plan pricing. Looks up the customer and their order history, then RECOMMENDS a refund amount and order ID. Cannot process refunds itself.",
   instructions: `You are a billing support specialist.
 When handling a billing issue:
 1) ALWAYS look up customer using their customer ID
 2) ALWAYS check order history for the customer
-3) Find duplicate charges or refund-eligible orders
+3) Find duplicate charges or refund-eligible orders. Every order row is a charge
+   the customer has paid, whatever its status. A plan charge billed after the
+   customer downgraded is refund-eligible. Never claim "no charge found" when an
+   order matching the amount the customer mentions exists.
 4) Calculate refund amount
 5) IMPORTANT: You do NOT process refunds directly. Prepare a recommendation only.
 
@@ -26,7 +31,7 @@ Respond with JSON only (no markdown, no code blocks):
   "orderId": string|null,
   "customerId": string|null,
   "reason": string }`,
-  model: groq("llama-3.3-70b-versatile"),
+  model: () => supportModel(),
   tools: {
     lookupCustomer: lookupCustomerTool,
     getOrderHistory: getOrderHistoryTool,

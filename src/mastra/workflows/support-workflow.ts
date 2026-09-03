@@ -1,17 +1,28 @@
 import { createWorkflow, createStep } from "@mastra/core/workflows";
 import { z } from "zod";
 import { PromptInjectionDetector, PIIDetector } from "@mastra/core/processors";
-import { groq } from "@ai-sdk/groq";
+import { supportModel } from "../model";
 import { triageAgent } from "../agents/triage";
 import { billingAgent } from "../agents/billing";
 import { technicalAgent } from "../agents/technical";
 import { accountAgent } from "../agents/account";
-import { processRefund } from "../tools";
+import {
+  executeRefundApproval,
+  refundDecisionOutputSchema,
+  refundResumeSchema,
+  refundSuspendSchema,
+} from "./refund-approval";
 
 // ─── Processors (LLM-based, replaces fragile regex) ─────────────────────────
+//
+// Built lazily and memoised: constructing them needs a resolved model, and we
+// do not want a missing API key to stop the whole dev server from booting.
+// Studio, the workflow graph, and the no-LLM refund demos all still work.
 
-const injectionDetector = new PromptInjectionDetector({
-  model: groq("llama-3.3-70b-versatile"),
+let _injectionDetector: PromptInjectionDetector | undefined;
+function getInjectionDetector() {
+  return (_injectionDetector ??= new PromptInjectionDetector({
+  model: supportModel(),
   detectionTypes: ["injection", "jailbreak", "system-override"],
   threshold: 0.7,
   strategy: "block",
@@ -21,10 +32,13 @@ const injectionDetector = new PromptInjectionDetector({
   structuredOutputOptions: {
     jsonPromptInjection: true,
   },
-});
+  }));
+}
 
-const piiDetector = new PIIDetector({
-  model: groq("llama-3.3-70b-versatile"),
+let _piiDetector: PIIDetector | undefined;
+function getPiiDetector() {
+  return (_piiDetector ??= new PIIDetector({
+  model: supportModel(),
   detectionTypes: ["email", "phone", "credit-card", "ssn"],
   threshold: 0.6,
   strategy: "redact",
@@ -35,7 +49,8 @@ const piiDetector = new PIIDetector({
   structuredOutputOptions: {
     jsonPromptInjection: true,
   },
-});
+  }));
+}
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 
@@ -118,7 +133,7 @@ const validateTicketStep = createStep({
     //       createdAt: new Date(),
     //     },
     //   ];
-    //   await injectionDetector.processInput({
+    //   await getInjectionDetector().processInput({
     //     messages,
     //     abort: (reason?: string) => {
     //       injectionBlocked = true;
@@ -151,7 +166,7 @@ const validateTicketStep = createStep({
           createdAt: new Date(),
         },
       ];
-      const piiResult = await piiDetector.processInput({
+      const piiResult = await getPiiDetector().processInput({
         messages: piiMessages,
         abort: (reason?: string) => {
           throw new Error(reason || "PII blocked");
@@ -355,6 +370,11 @@ const specialistStep = createStep({
 
 // ─── Step 3: Refund Approval (HITL) ──────────────────────────────────────────
 
+/**
+ * Same gate the supervisor agent reaches through `workflow-refundWorkflow`.
+ * The step here only adapts the specialist's output shape; the decision itself
+ * lives in refund-approval.ts so there is exactly one place that moves money.
+ */
 const refundApprovalStep = createStep({
   id: "refund-approval",
   description: "Human-in-the-loop approval for refunds over $50",
@@ -374,99 +394,29 @@ const refundApprovalStep = createStep({
     category: z.enum(["billing", "technical", "account"]),
     priority: z.enum(["low", "medium", "high", "urgent"]),
   }),
-  outputSchema: z.object({
-    finalResponse: z.string(),
-    action: z.string(),
-    refundProcessed: z.boolean(),
-    refundId: z.string().optional(),
-    managerApproval: z.boolean().optional(),
-    managerNote: z.string().optional(),
-  }),
-  resumeSchema: z.object({
-    approved: z.boolean().optional().default(false),
-    managerNote: z.string().optional(),
-  }),
-  suspendSchema: z.object({
-    message: z.string(),
-    refundAmount: z.number(),
-    orderId: z.string(),
-    customerId: z.string(),
-    agentRecommendation: z.string(),
-  }),
+  outputSchema: refundDecisionOutputSchema,
+  resumeSchema: refundResumeSchema,
+  suspendSchema: refundSuspendSchema,
   execute: async ({ inputData, resumeData, suspend }) => {
-    const { action, refundAmount, orderId, customerId, response, reason } =
-      inputData;
+    // Only a "refund" action opens the gate; everything else passes through.
+    const isRefund = inputData.action === "refund";
 
-    // Not a refund action — return as-is
-    if (action !== "refund" || !refundAmount || !orderId) {
-      return {
-        finalResponse: response,
-        action,
-        refundProcessed: false,
-      };
-    }
-
-    // Auto-approve small refunds (<= $50)
-    if (refundAmount <= 50) {
-      const refundResult = await processRefund({
-        orderId,
-        amount: refundAmount,
-        reason,
-      });
-
-      return {
-        finalResponse: `${response}\n\nRefund of $${refundAmount} auto-approved and processed. Refund ID: ${refundResult.refundId}`,
-        action: "refund-auto-approved",
-        refundProcessed: true,
-        refundId: refundResult.refundId,
-        managerApproval: false,
-      };
-    }
-
-    // Large refund (> $50) — requires human approval
-    if (!resumeData) {
-      await suspend({
-        message: `Refund of $${refundAmount} requires manager approval`,
-        refundAmount,
-        orderId,
-        customerId,
-        agentRecommendation: reason,
-      });
-      // Execution pauses here until resume
-      return {
-        finalResponse: "Suspended: awaiting manager approval",
-        action: "suspended",
-        refundProcessed: false,
-      };
-    }
-
-    // Resumed with manager decision
-    const { approved, managerNote } = resumeData;
-
-    if (!approved) {
-      return {
-        finalResponse: `${response}\n\nRefund of $${refundAmount} was declined by manager. Note: ${managerNote || "No note provided."}`,
-        action: "refund-declined",
-        refundProcessed: false,
-        managerApproval: false,
-        managerNote,
-      };
-    }
-
-    const refundResult = await processRefund({
-      orderId,
-      amount: refundAmount,
-      reason,
+    const result = await executeRefundApproval({
+      inputData: {
+        customerId: inputData.customerId,
+        orderId: isRefund ? inputData.orderId : null,
+        refundAmount: isRefund ? inputData.refundAmount : null,
+        reason: inputData.reason,
+        agentResponse: inputData.response,
+      },
+      resumeData,
+      suspend,
     });
 
-    return {
-      finalResponse: `${response}\n\nRefund of $${refundAmount} approved by manager and processed. Refund ID: ${refundResult.refundId}. Note: ${managerNote || "Approved."}`,
-      action: "refund-approved",
-      refundProcessed: true,
-      refundId: refundResult.refundId,
-      managerApproval: true,
-      managerNote,
-    };
+    // Preserve the original action label when no refund was involved.
+    return result.action === "no-refund"
+      ? { ...result, action: inputData.action }
+      : result;
   },
 });
 
@@ -477,14 +427,7 @@ export const supportWorkflow = createWorkflow({
   description:
     "Full customer support escalation workflow with guardrails, triage, specialist routing, and HITL",
   inputSchema: workflowInputSchema,
-  outputSchema: z.object({
-    finalResponse: z.string(),
-    action: z.string(),
-    refundProcessed: z.boolean(),
-    refundId: z.string().optional(),
-    managerApproval: z.boolean().optional(),
-    managerNote: z.string().optional(),
-  }),
+  outputSchema: refundDecisionOutputSchema,
 })
   .then(validateTicketStep)
   .then(triageStep)
