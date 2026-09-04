@@ -115,6 +115,25 @@
     color: var(--text);
   }
 
+  /* Copyable URL (slide 11) */
+  .url-box {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+    padding: 8px 8px 8px 14px;
+  }
+  .url-text {
+    font-family: 'JetBrains Mono', monospace; font-size: 15px; color: var(--text);
+    user-select: all; -webkit-user-select: all; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .copy-btn {
+    font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0.02em;
+    color: white; background: var(--blue); border: 0; border-radius: 8px;
+    padding: 7px 14px; cursor: pointer; flex-shrink: 0;
+  }
+  .copy-btn:hover { filter: brightness(1.08); }
+  .copy-btn.copied { background: #16A34A; }
+
   /* Slide header block, identical on every content slide */
   .slide-head { display: flex; flex-direction: column; gap: 10px; flex-shrink: 0; }
   .slide-head .divider { margin-top: 4px; }
@@ -418,14 +437,13 @@
         </filter>
       </defs>
 
-      <!-- edges: supervisor -> specialists -->
-      <path class="edge" stroke="#4A7AE5" d="M230,92 C120,126 80,158 66,190"/>
-      <path class="edge" stroke="#D97706" d="M230,92 C205,126 195,158 188,190"/>
-      <path class="edge" stroke="#16A34A" d="M230,92 C255,126 265,158 272,190"/>
-      <path class="edge" stroke="#7C3AED" d="M230,92 C340,126 380,158 394,190"/>
+      <!-- edges: supervisor -> specialists (model routes directly) -->
+      <path class="edge" stroke="#16A34A" d="M230,92 C170,126 120,158 100,190"/>
+      <path class="edge" stroke="#D97706" d="M230,92 C230,126 230,158 230,190"/>
+      <path class="edge" stroke="#7C3AED" d="M230,92 C290,126 340,158 360,190"/>
 
       <!-- highlighted path: billing -> the gate -->
-      <path class="edge-flow" stroke="#D97706" d="M188,236 C188,300 210,326 230,360"/>
+      <path class="edge-flow" stroke="#D97706" d="M230,238 L230,360"/>
 
       <!-- supervisor -->
       <circle class="pulse-ring" cx="230" cy="52" r="60" fill="none" stroke="#D97706" stroke-opacity="0.18" stroke-width="1.5"/>
@@ -435,17 +453,15 @@
       <text class="node-label" x="230" y="49" text-anchor="middle" font-size="17">Supervisor</text>
       <text class="node-sub" x="230" y="67" text-anchor="middle" font-size="11">model routes</text>
 
-      <!-- specialists -->
+      <!-- specialists (three; the supervisor routes to these directly) -->
       <g filter="url(#cvShadow)">
-        <rect class="node" x="22"  y="192" width="88" height="46" rx="12" stroke="#CBD8F5"/>
-        <rect class="node" x="144" y="192" width="88" height="46" rx="12" stroke="#F0D9A8"/>
-        <rect class="node" x="244" y="192" width="88" height="46" rx="12" stroke="#B3E6C1"/>
-        <rect class="node" x="366" y="192" width="88" height="46" rx="12" stroke="#DAC6F0"/>
+        <rect class="node" x="52"  y="192" width="96" height="46" rx="12" stroke="#B3E6C1"/>
+        <rect class="node" x="182" y="192" width="96" height="46" rx="12" stroke="#F0D9A8"/>
+        <rect class="node" x="312" y="192" width="96" height="46" rx="12" stroke="#DAC6F0"/>
       </g>
-      <text class="node-label" x="66"  y="220" text-anchor="middle" font-size="13.5">Triage</text>
-      <text class="node-label" x="188" y="220" text-anchor="middle" font-size="13.5">Billing</text>
-      <text class="node-label" x="288" y="220" text-anchor="middle" font-size="13.5">Technical</text>
-      <text class="node-label" x="410" y="220" text-anchor="middle" font-size="13.5">Account</text>
+      <text class="node-label" x="100" y="220" text-anchor="middle" font-size="13.5">Technical</text>
+      <text class="node-label" x="230" y="220" text-anchor="middle" font-size="13.5">Billing</text>
+      <text class="node-label" x="360" y="220" text-anchor="middle" font-size="13.5">Account</text>
 
       <!-- the one gate -->
       <g filter="url(#cvShadow)">
@@ -481,9 +497,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 2: Speaker + who this is for                   0:02     -->
+<!-- SLIDE 2: Speaker + who this is for                   0:00     -->
 <!-- ============================================================ -->
-<div class="slide row-layout gap-40 items-center" data-t="2">
+<div class="slide row-layout gap-40 items-center" data-t="0">
   <div class="flex-col gap-20 flex-1">
     <span class="label animate-fade delay-1">About the Speaker</span>
     <h2 class="title-lg animate-up delay-2">Aman Zishan</h2>
@@ -505,9 +521,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 3: Agenda                                      0:04     -->
+<!-- SLIDE 3: Agenda                                      0:01     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-20" data-t="4">
+<div class="slide flex-col gap-20" data-t="1">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Overview</span>
     <h2 class="title-lg animate-up delay-2">Agenda &mdash; 3 hours, one break</h2>
@@ -515,61 +531,61 @@
   </div>
   <div class="flex-col gap-8 flex-1 animate-up delay-3">
     <div class="agenda-row">
-      <span class="agenda-clock">0:00 &ndash; 0:10</span>
+      <span class="agenda-clock">0:00 &ndash; 0:07</span>
       <span class="agenda-name">Framing</span>
       <span class="body-sm">What we are building, and why the supervisor-vs-workflow choice is the real decision.</span>
-      <span class="agenda-mins">10 min</span>
+      <span class="agenda-mins">7 min</span>
     </div>
     <div class="agenda-row">
-      <span class="agenda-clock">0:10 &ndash; 0:30</span>
+      <span class="agenda-clock">0:07 &ndash; 0:27</span>
       <span class="agenda-name">1 &middot; Security primitives</span>
       <span class="body-sm">Least authority, blast radius, trust spectrum, suspend/resume mechanics, guardrails, storage.</span>
       <span class="agenda-mins">20 min</span>
     </div>
     <div class="agenda-row">
-      <span class="agenda-clock">0:30 &ndash; 1:05</span>
+      <span class="agenda-clock">0:27 &ndash; 0:55</span>
       <span class="agenda-name">2 &middot; Agent + tools</span>
       <span class="body-sm">Boot the repo. Triage agent with zero tools. Tools backed by SQLite, idempotent by schema.</span>
-      <span class="agenda-mins">35 min</span>
+      <span class="agenda-mins">28 min</span>
     </div>
     <div class="agenda-row">
-      <span class="agenda-clock">1:05 &ndash; 1:40</span>
+      <span class="agenda-clock">0:55 &ndash; 1:28</span>
       <span class="agenda-name">3 &middot; Native multi-agent</span>
       <span class="body-sm">Supervisor with generated delegation tools. Hooks as least authority at the boundary.</span>
-      <span class="agenda-mins">35 min</span>
+      <span class="agenda-mins">33 min</span>
     </div>
     <div class="agenda-row break">
-      <span class="agenda-clock">1:40 &ndash; 1:50</span>
+      <span class="agenda-clock">1:28 &ndash; 1:38</span>
       <span class="agenda-name">Break</span>
       <span class="body-sm">Fix anyone whose environment is not booting.</span>
       <span class="agenda-mins">10 min</span>
     </div>
     <div class="agenda-row">
-      <span class="agenda-clock">1:50 &ndash; 2:20</span>
+      <span class="agenda-clock">1:38 &ndash; 2:13</span>
       <span class="agenda-name">4 &middot; HITL hands-on</span>
       <span class="body-sm">Run the workflow in Studio: auto-approve, suspend, resume, decline, PII, idempotency.</span>
-      <span class="agenda-mins">30 min</span>
+      <span class="agenda-mins">35 min</span>
     </div>
     <div class="agenda-row">
-      <span class="agenda-clock">2:20 &ndash; 2:50</span>
+      <span class="agenda-clock">2:13 &ndash; 2:38</span>
       <span class="agenda-name">5 &middot; Signals</span>
       <span class="body-sm">Waking an idle thread, reactive guardrails, two people on one agent loop.</span>
-      <span class="agenda-mins">30 min</span>
+      <span class="agenda-mins">25 min</span>
     </div>
     <div class="agenda-row">
-      <span class="agenda-clock">2:50 &ndash; 3:00</span>
-      <span class="agenda-name">Wrap</span>
-      <span class="body-sm">Which controls held, and how few of them involved the model. Questions.</span>
-      <span class="agenda-mins">10 min</span>
+      <span class="agenda-clock">2:38 &ndash; 3:00</span>
+      <span class="agenda-name">Wrap + Q&amp;A</span>
+      <span class="body-sm">Which controls held, and how few of them involved the model. Questions, and slack for overrun.</span>
+      <span class="agenda-mins">22 min</span>
     </div>
   </div>
   <div class="body-sm animate-fade delay-5">Interrupt with questions at any point. The hands-on blocks assume you are typing along.</div>
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 4: What we are building                        0:06     -->
+<!-- SLIDE 4: What we are building                        0:02     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-20" data-t="6">
+<div class="slide flex-col gap-20" data-t="2">
   <div class="slide-head">
     <span class="label animate-fade delay-1">The Project</span>
     <h2 class="title-lg animate-up delay-2">Same four specialists, two coordinators, one gate</h2>
@@ -586,9 +602,9 @@
       <div class="body-sm">The model decides who handles the ticket. A fifth specialist is one more line; there is no router to edit.</div>
       <div class="code-block code-sm">
         <span class="keyword">new</span> <span class="type">Agent</span>({<br>
-        &nbsp;&nbsp;agents: { triage, billing,<br>
-        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;technical, account },<br>
-        &nbsp;&nbsp;workflows: { refundWorkflow },<br>
+        &nbsp;&nbsp;agents: { billing, technical,<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;account },<br>
+        &nbsp;&nbsp;tools: { requestRefundApproval },<br>
         &nbsp;&nbsp;delegation: { onDelegationStart }<br>
         })
       </div>
@@ -629,9 +645,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 5: Least authority + reversibility             0:10     -->
+<!-- SLIDE 5: Least authority + reversibility             0:07     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-24" data-t="10">
+<div class="slide flex-col gap-24" data-t="7">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 1 &middot; Security Primitives</span>
     <h2 class="title-lg animate-up delay-2">Least authority is a property of the tool list</h2>
@@ -673,9 +689,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 6: Blast radius + structured I/O               0:14     -->
+<!-- SLIDE 6: Blast radius + structured I/O               0:11     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-24" data-t="14">
+<div class="slide flex-col gap-24" data-t="11">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 1 &middot; Security Primitives</span>
     <h2 class="title-lg animate-up delay-2">Bound the damage, type the boundary</h2>
@@ -723,9 +739,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 7: Trust spectrum                              0:17     -->
+<!-- SLIDE 7: Trust spectrum                              0:14     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-28" data-t="17">
+<div class="slide flex-col gap-28" data-t="14">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 1 &middot; Human-in-the-Loop</span>
     <h2 class="title-lg animate-up delay-2">Autonomy is a policy value, not a vibe</h2>
@@ -763,9 +779,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 8: Suspend & resume mechanics                  0:20     -->
+<!-- SLIDE 8: Suspend & resume mechanics                  0:16     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-24" data-t="20">
+<div class="slide flex-col gap-24" data-t="16">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 1 &middot; Code Deep Dive</span>
     <h2 class="title-lg animate-up delay-2">HITL: Suspend &amp; Resume</h2>
@@ -809,16 +825,16 @@
         <div class="body-sm"><span class="strong">The step runs twice.</span> Everything before the <code class="inline">suspend</code> check runs again on resume, so it must be side-effect free or idempotent. Ours is: the only write is behind the gate.</div>
       </div>
       <div class="card flex-col gap-8">
-        <div class="body-sm"><span class="strong">Shared by both paths.</span> The support workflow wraps this function as a step. The supervisor reaches it as <code class="inline">workflow-refundWorkflow</code>. One gate, two doors.</div>
+        <div class="body-sm"><span class="strong">Shared by both paths.</span> The support workflow wraps this function as a step. The supervisor reaches the same run through a non-blocking <code class="inline">requestRefundApproval</code> tool. One gate, two doors.</div>
       </div>
     </div>
   </div>
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 9: Guardrails                                  0:24     -->
+<!-- SLIDE 9: Guardrails                                  0:21     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-24" data-t="24">
+<div class="slide flex-col gap-24" data-t="21">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 1 &middot; Defense in Depth</span>
     <h2 class="title-lg animate-up delay-2">Guardrails: At the Door and Mid-Run</h2>
@@ -874,9 +890,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 10: Storage is the backbone                    0:27     -->
+<!-- SLIDE 10: Storage is the backbone                    0:24     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-24" data-t="27">
+<div class="slide flex-col gap-24" data-t="24">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 1 &middot; Scalability</span>
     <h2 class="title-lg animate-up delay-2">Storage Is the Backbone, Not a Cache</h2>
@@ -934,9 +950,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 11: Setup + triage agent                       0:30     -->
+<!-- SLIDE 11: Setup + triage agent                       0:27     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-24" data-t="30">
+<div class="slide flex-col gap-24" data-t="27">
   <div class="slide-head">
     <span class="label label-blue animate-fade delay-1">Block 2 &middot; Hands-On</span>
     <h2 class="title-lg animate-up delay-2">Boot the Repo, Meet the Triage Agent</h2>
@@ -958,11 +974,17 @@
           [support-system] LLM provider: groq / openai/gpt-oss-120b
         </div>
       </div>
-      <div class="card flex-row gap-16 items-center" style="padding: 14px 20px;">
-        <img src="image.png" alt="Repo QR" style="width:76px; height:76px; border-radius:8px;">
-        <div class="flex-col gap-4">
-          <div class="strong" style="font-size:16px;">One file imports an LLM SDK: <code class="inline">src/mastra/model.ts</code></div>
-          <div class="body-sm">Every agent calls <code class="inline">supportModel()</code>. Swap the key, restart, and delegation, hooks, the gate and idempotency behave identically. None of them are properties of the model.</div>
+      <div class="card flex-row gap-20 items-center" style="padding: 16px 20px;">
+        <div style="background:white; padding:8px; border-radius:12px; border:1px solid var(--border); flex-shrink:0;">
+          <img src="repo-qr.png" alt="QR code: github.com/Aman-zishan/Support-Agent" style="width:132px; height:132px; display:block;">
+        </div>
+        <div class="flex-col gap-8" style="flex:1; min-width:0;">
+          <div class="strong" style="font-size:16px;">Scan or copy the repo</div>
+          <div class="url-box">
+            <span class="url-text" id="repo-url">https://github.com/Aman-zishan/Support-Agent</span>
+            <button type="button" class="copy-btn" data-copy="https://github.com/Aman-zishan/Support-Agent">Copy</button>
+          </div>
+          <div class="body-sm">One file imports an LLM SDK: <code class="inline">src/mastra/model.ts</code>. Every agent calls <code class="inline">supportModel()</code>. Swap the key, restart &mdash; delegation, hooks, the gate and idempotency do not change.</div>
         </div>
       </div>
     </div>
@@ -1050,9 +1072,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 13: Native multi-agent                         1:05     -->
+<!-- SLIDE 13: Native multi-agent                         0:55     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-20" data-t="65">
+<div class="slide flex-col gap-20" data-t="55">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 3 &middot; Native Multi-Agent</span>
     <h2 class="title-lg animate-up delay-2">Supervisor &amp; Subagents</h2>
@@ -1083,15 +1105,15 @@
         <span class="file-label">agents/supervisor.ts</span><br>
         <span class="keyword">new</span> <span class="type">Agent</span>({<br>
         &nbsp;&nbsp;id: <span class="string">"support-supervisor"</span>,<br>
-        <span class="highlight-line">&nbsp;&nbsp;agents: { triageAgent, billingAgent,<br></span>
-        <span class="highlight-line">&nbsp;&nbsp;&nbsp;&nbsp;technicalAgent, accountAgent },<br></span>
-        <span class="highlight-line">&nbsp;&nbsp;workflows: { refundWorkflow },<br></span>
-        &nbsp;&nbsp;tools: { lookupCustomer },<br>
+        <span class="highlight-line">&nbsp;&nbsp;agents: { billingAgent, technicalAgent,<br></span>
+        <span class="highlight-line">&nbsp;&nbsp;&nbsp;&nbsp;accountAgent },&nbsp;&nbsp;<span class="comment">// model routes directly</span><br></span>
+        &nbsp;&nbsp;tools: { lookupCustomer,<br>
+        <span class="highlight-line">&nbsp;&nbsp;&nbsp;&nbsp;requestRefundApproval },<br></span>
         &nbsp;&nbsp;inputProcessors: [refundPolicyProcessor],<br>
         &nbsp;&nbsp;memory: <span class="keyword">new</span> <span class="type">Memory</span>({ &hellip; }),<br>
         });
       </div>
-      <div class="body-sm">Mastra generates one tool per entry, <code class="inline">agent-billingAgent</code>, <code class="inline">workflow-refundWorkflow</code>, described by each subagent's <code class="inline">description</code>. The <em>model</em> routes.</div>
+      <div class="body-sm">Mastra generates one <code class="inline">agent-*</code> tool per subagent, described by its <code class="inline">description</code>. The <em>model</em> routes &mdash; no triage classifier, because that would just be a second router. The refund gate is a <span class="strong">non-blocking tool</span>, not an inline workflow (next-but-one slide).</div>
     </div>
 
     <div class="flex-col gap-12 animate-up delay-6" style="width:320px;">
@@ -1111,9 +1133,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 14: Delegation hooks                           1:20     -->
+<!-- SLIDE 14: Delegation hooks                           1:13     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-20" data-t="80">
+<div class="slide flex-col gap-20" data-t="73">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 3 &middot; Security</span>
     <h2 class="title-lg animate-up delay-2">Delegation Hooks: Least Authority at the Boundary</h2>
@@ -1126,10 +1148,9 @@
       <span class="fn">onDelegationStart</span>: <span class="keyword">async</span> (ctx) =&gt; {<br>
       &nbsp;&nbsp;<span class="comment">// runaway loop guard</span><br>
       &nbsp;&nbsp;<span class="keyword">if</span> (ctx.iteration &gt; MAX_DELEGATIONS) <span class="keyword">return</span> { proceed: <span class="keyword">false</span>, rejectionReason: &hellip; };<br><br>
-      <span class="highlight-line">&nbsp;&nbsp;<span class="comment">// no refund or billing work without an identified customer</span><br></span>
-      <span class="highlight-line">&nbsp;&nbsp;<span class="keyword">const</span> needsCustomer = ctx.primitiveId === <span class="string">"refund-workflow"</span><br></span>
-      <span class="highlight-line">&nbsp;&nbsp;&nbsp;&nbsp;|| ctx.primitiveId === <span class="string">"billing-agent"</span>;<br></span>
-      <span class="highlight-line">&nbsp;&nbsp;<span class="keyword">if</span> (needsCustomer &amp;&amp; !<span class="regex">/\bC\d{3,}\b/</span>.<span class="fn">test</span>(ctx.prompt))<br></span>
+      <span class="highlight-line">&nbsp;&nbsp;<span class="comment">// no billing work without an identified customer</span><br></span>
+      <span class="highlight-line">&nbsp;&nbsp;<span class="keyword">if</span> (ctx.primitiveId === <span class="string">"billing-agent"</span><br></span>
+      <span class="highlight-line">&nbsp;&nbsp;&nbsp;&nbsp;&amp;&amp; !<span class="regex">/\bC\d{3,}\b/</span>.<span class="fn">test</span>(ctx.prompt))<br></span>
       <span class="highlight-line">&nbsp;&nbsp;&nbsp;&nbsp;<span class="keyword">return</span> { proceed: <span class="keyword">false</span>, rejectionReason: <span class="string">"No valid customer ID &hellip;"</span> };<br></span>
       &nbsp;&nbsp;<span class="keyword">return</span> { proceed: <span class="keyword">true</span> };<br>
       },<br><br>
@@ -1144,7 +1165,7 @@
     <div class="flex-col gap-12 animate-right delay-5" style="width:440px;">
       <div class="card flex-col gap-8">
         <span class="badge badge-amber">onDelegationStart</span>
-        <div class="body-sm">Fires before the subagent runs. Reject, rewrite the prompt, or cap its steps. <code class="inline">primitiveType</code> is <code class="inline">'agent' | 'workflow'</code>, so one hook guards specialists and the refund gate alike.</div>
+        <div class="body-sm">Fires before a subagent runs. Reject, rewrite the prompt, or cap its steps. It guards the specialist delegations; the refund path is a tool, so it enforces the same customer-ID check inside itself &mdash; least authority at whichever boundary the risk crosses.</div>
       </div>
       <div class="card flex-col gap-8">
         <span class="badge badge-blue">onDelegationComplete</span>
@@ -1159,9 +1180,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 15: Supervisor or workflow                     1:30     -->
+<!-- SLIDE 15: Supervisor or workflow                     1:23     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-20" data-t="90">
+<div class="slide flex-col gap-20" data-t="83">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 3 &middot; Architecture</span>
     <h2 class="title-lg animate-up delay-2">Supervisor or Workflow?</h2>
@@ -1207,15 +1228,15 @@
         <div class="card" style="padding:12px 16px;"><div class="body-sm"><span class="strong">Risk is the tool call itself</span> &rarr; <code class="inline">requireApproval</code> on the tool.</div></div>
         <div class="card" style="padding:12px 16px;"><div class="body-sm"><span class="strong">Risk is inside a step</span> &rarr; workflow <code class="inline">suspend()</code>. <span style="color:var(--green); font-weight:600;">&#9664; ours</span></div></div>
       </div>
-      <div class="body-sm mt-auto">We keep the gate in the workflow and let the supervisor <em>reach</em> it as a tool. It decides whether to open the gate, never what comes out.</div>
+      <div class="body-sm mt-auto">The supervisor reaches the gate through a <span class="strong">non-blocking</span> tool: it starts the run and returns at once. The <code class="inline">$50</code> decision is in the workflow, never in the prompt &mdash; the model only decides to <em>call</em>, never to approve. And a suspended approval never freezes the chat.</div>
     </div>
   </div>
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 16: Break                                      1:40     -->
+<!-- SLIDE 16: Break                                      1:28     -->
 <!-- ============================================================ -->
-<div class="slide flex-col justify-center items-center gap-24" data-t="100" style="text-align:center;">
+<div class="slide flex-col justify-center items-center gap-24" data-t="88" style="text-align:center;">
   <span class="label animate-fade delay-1">1:40 &ndash; 1:50</span>
   <h2 class="title-xl animate-up delay-2">Ten-minute break</h2>
   <div class="divider delay-3" style="margin: 0 auto;"></div>
@@ -1230,9 +1251,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 17: Block 4 runsheet                           1:50     -->
+<!-- SLIDE 17: Block 4 runsheet                           1:38     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-20" data-t="110">
+<div class="slide flex-col gap-20" data-t="98">
   <div class="slide-head">
     <span class="label label-blue animate-fade delay-1">Block 4 &middot; Hands-On</span>
     <h2 class="title-lg animate-up delay-2">Run the Gate: Studio &rarr; Workflows &rarr; supportWorkflow</h2>
@@ -1268,9 +1289,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 18: Signals: the problem                       2:20     -->
+<!-- SLIDE 18: Signals: the problem                       2:13     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-24" data-t="140">
+<div class="slide flex-col gap-24" data-t="133">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 5 &middot; Signals</span>
     <h2 class="title-lg animate-up delay-2">When the Agent Has to Wait</h2>
@@ -1311,9 +1332,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 19: Four signal types                          2:26     -->
+<!-- SLIDE 19: Four signal types                          2:17     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-18" data-t="146">
+<div class="slide flex-col gap-18" data-t="137">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 5 &middot; Signals</span>
     <h2 class="title-lg animate-up delay-2">Four Ways Into a Running Thread</h2>
@@ -1374,9 +1395,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 20: Closing the HITL loop                      2:34     -->
+<!-- SLIDE 20: Closing the HITL loop                      2:23     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-20" data-t="154">
+<div class="slide flex-col gap-20" data-t="143">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Block 5 &middot; Live Demo</span>
     <h2 class="title-lg animate-up delay-2">Closing the HITL Loop</h2>
@@ -1385,9 +1406,9 @@
   <p class="body-lg animate-up delay-3" style="max-width:1120px;">The refund gate and the conversation were two disconnected systems. One signal joins them.</p>
   <div class="flex-row gap-24 flex-1 items-start">
     <div class="flex-col gap-6 flex-1 animate-left delay-4">
-      <div class="flow-step"><div class="flow-num" style="background:var(--blue-light); color:var(--blue);">1</div><div><div class="strong" style="font-size:15px;">Customer asks for the $897 refund</div><div class="body-sm">Supervisor delegates to billing, then opens the refund workflow</div></div></div>
+      <div class="flow-step"><div class="flow-num" style="background:var(--blue-light); color:var(--blue);">1</div><div><div class="strong" style="font-size:15px;">Customer asks for the $897 refund</div><div class="body-sm">Supervisor delegates to billing, then calls <code class="inline">requestRefundApproval</code></div></div></div>
       <div class="flow-arrow">&#8595;</div>
-      <div class="flow-step"><div class="flow-num" style="background:var(--accent-light); color:var(--accent);">2</div><div><div class="strong" style="font-size:15px;"><code class="inline">suspend()</code>: over the $50 limit</div><div class="body-sm">Snapshot to storage, worker freed</div></div></div>
+      <div class="flow-step"><div class="flow-num" style="background:var(--accent-light); color:var(--accent);">2</div><div><div class="strong" style="font-size:15px;">Run <code class="inline">suspend()</code>s; tool returns <code class="inline">pending</code></div><div class="body-sm">Snapshot to storage. The supervisor tells the customer &amp; ends its turn &mdash; the chat stays open</div></div></div>
       <div class="flow-arrow">&#8595;</div>
       <div class="flow-step" style="border-color:#F7ADAD;"><div class="flow-num" style="background:var(--red-light); color:var(--red);">3</div><div><div class="strong" style="font-size:15px;">Thread goes idle. Nobody is typing.</div><div class="body-sm">The process could exit here entirely</div></div></div>
       <div class="flow-arrow">&#8595;</div>
@@ -1418,9 +1439,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 21: Recap                                      2:50     -->
+<!-- SLIDE 21: Recap                                      2:38     -->
 <!-- ============================================================ -->
-<div class="slide flex-col gap-20" data-t="170">
+<div class="slide flex-col gap-20" data-t="158">
   <div class="slide-head">
     <span class="label animate-fade delay-1">Wrap</span>
     <h2 class="title-lg animate-up delay-2">Eight Controls. Count How Many Involve the Model.</h2>
@@ -1491,9 +1512,9 @@
 </div>
 
 <!-- ============================================================ -->
-<!-- SLIDE 22: Thank you                                  2:54     -->
+<!-- SLIDE 22: Thank you                                  2:42     -->
 <!-- ============================================================ -->
-<div class="slide" data-t="174" style="padding: 0;">
+<div class="slide" data-t="162" style="padding: 0;">
   <div style="position:absolute; inset:0; background: linear-gradient(135deg, #FAFAF8 0%, #F8F0E3 50%, #EDE4D3 100%);"></div>
   <div class="flex-row items-center" style="height:100%; position:relative; z-index:1;">
     <div class="flex-col gap-24 justify-center" style="flex:1; padding: 64px 60px 64px 80px;">
@@ -1600,23 +1621,55 @@
         return;
       }
       const total = (Date.now() - startedAt) / 1000;
-      const target = Number(slides[current] && slides[current].dataset.t || 0) * 60;
+      const cur = Number(slides[current] && slides[current].dataset.t || 0);
+      const target = cur * 60;
       const delta = total - target;               // + = behind, - = ahead
       const state = delta > 180 ? 'behind' : delta > 60 ? 'slipping' : 'on-pace';
       timerEl.classList.remove('on-pace', 'slipping', 'behind');
       timerEl.classList.add(state);
       const paceLabel = Math.abs(delta) < 45 ? 'on time'
         : (delta > 0 ? '+' + fmt(delta) + ' behind' : fmt(-delta) + ' ahead');
+
+      // Budget for THIS slide = minutes until the next slide's arrival time.
+      let nextT = null;
+      for (let j = current + 1; j < slides.length; j++) {
+        const t = slides[j] && slides[j].dataset.t;
+        if (t != null && t !== '') { nextT = Number(t); break; }
+      }
+      const budget = (nextT != null ? Math.max(1, nextT - cur) : 3) * 60;
+      // Colour the "here" clock only once you are eating into the slide's budget.
+      const hereColor = here > budget ? '#F38BA8' : here > budget * 0.8 ? '#F9E2AF' : '#F5F5FF';
+
       timerEl.innerHTML =
         '<span class="dot"></span>' +
         '<span class="seg"><span class="num">' + fmt(total) + '</span><span class="lbl">total</span></span>' +
         '<span class="sep"></span>' +
-        '<span class="seg"><span class="num">' + fmt(here) + '</span><span class="lbl">here</span></span>' +
+        '<span class="seg"><span class="num"><span style="color:' + hereColor + '">' + fmt(here) +
+          '</span> / ' + fmt(budget) + '</span><span class="lbl">this slide</span></span>' +
         '<span class="sep"></span>' +
         '<span class="pace">' + paceLabel + '</span>';
     } catch (_) { /* a tracker must never break the deck */ }
   }
   setInterval(renderTimer, 1000);
+
+  // Copy button (slide 11): clipboard API, with a select-text fallback.
+  document.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const text = btn.dataset.copy;
+      let ok = false;
+      try { await navigator.clipboard.writeText(text); ok = true; } catch (_) {}
+      if (!ok) {
+        const el = document.getElementById('repo-url');
+        if (el) { const r = document.createRange(); r.selectNodeContents(el);
+          const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+          try { ok = document.execCommand('copy'); } catch (_) {} }
+      }
+      btn.textContent = ok ? 'Copied' : 'Select & copy';
+      btn.classList.toggle('copied', ok);
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 1800);
+    });
+  });
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'Enter') { e.preventDefault(); nextSlide(); }

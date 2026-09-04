@@ -1,13 +1,12 @@
 import { Agent } from "@mastra/core/agent";
 import { supportModel } from "../model";
 import { Memory } from "@mastra/memory";
-import { triageAgent } from "./triage";
 import { billingAgent } from "./billing";
 import { technicalAgent } from "./technical";
 import { accountAgent } from "./account";
-import { refundWorkflow } from "../workflows/refund-workflow";
 import { refundPolicyProcessor } from "../processors/refund-policy";
 import { lookupCustomerTool } from "../tools";
+import { requestRefundApprovalTool } from "../tools/request-refund-approval";
 
 /**
  * THE SUPERVISOR — native Mastra multi-agent coordination.
@@ -15,18 +14,20 @@ import { lookupCustomerTool } from "../tools";
  * What this replaces: the old `route-ticket.ts` tool, which called
  * triageAgent.generate(), parsed the JSON, and picked a specialist with an
  * if/else chain. That was one agent with a hardcoded router bolted on. The
- * routing decision lived in TypeScript, not in a model, and adding a fifth
- * specialist meant editing the if/else.
+ * routing decision lived in TypeScript, not in a model.
  *
  * Here the specialists are declared on `agents` and Mastra generates one
  * delegation tool per entry (`agent-billingAgent`, `agent-technicalAgent`, ...)
  * from each subagent's `description`. The supervisor's model decides who to
- * call, in what order, and whether to call two of them. Adding a specialist is
- * one line.
+ * call, in what order, and whether to call two of them. It routes directly — no
+ * separate triage classifier, because that would just be a second router doing
+ * the work this model already does. (Triage still exists; it drives the coded
+ * branch in the deterministic supportWorkflow, where a classifier earns its keep.)
  *
- * `workflows: { refundWorkflow }` becomes a `workflow-refundWorkflow` tool, so
- * the one action that moves money stays behind the HITL gate. The supervisor
- * decides whether to open that gate; it never decides what comes out.
+ * Refunds go through `requestRefundApproval`, a NON-BLOCKING tool: <= $50 settles
+ * now; > $50 starts the suspendable refund run and returns "pending" immediately,
+ * so a suspended approval never freezes the live conversation. The gate is still
+ * the one workflow; the supervisor decides whether to open it, never what comes out.
  */
 
 const MAX_DELEGATIONS = 8;
@@ -44,41 +45,56 @@ export const supportSupervisorAgent = new Agent({
 solve tickets yourself — you delegate to specialists and relay their answers.
 
 WHO YOU HAVE
-- agent-triageAgent    classifies a ticket and sets priority. No tools, takes no action.
 - agent-billingAgent   invoices, payments, duplicate charges. Recommends refunds.
 - agent-technicalAgent bugs, errors, API and integration questions.
 - agent-accountAgent   passwords, logins, plan changes, profile and closure requests.
-- workflow-refundWorkflow  the ONLY way a refund happens. Over $50 it pauses for a manager.
+- request-refund-approval  the ONLY way a refund happens. <= $50 settles at once;
+  over $50 it returns "pending-approval" and a manager decides out of band.
 
 HOW TO WORK
 1. Collect the customer ID first (format C001, C002, C003). Do not delegate without one.
-2. If the right specialist is obvious from the ticket, delegate straight to them.
-   If it is ambiguous, or spans two areas, call agent-triageAgent first.
+2. Route the ticket to the specialist it belongs to. You decide — there is no separate
+   triage step. If it spans two areas, delegate to both.
 3. Pass the specialist the customer ID and the ticket. They return JSON — read it,
    never show it to the customer.
-4. If a billing specialist returns action "refund" with a refundAmount and orderId,
-   call workflow-refundWorkflow with those values plus the specialist's response.
-   Report only what the workflow returns.
-5. If the workflow suspends, tell the customer their request is with a manager.
-   Do not guess the outcome.
+4. If billing returns action "refund" with a refundAmount and orderId, call
+   request-refund-approval with those values. Report only what the tool returns.
+5. If the tool returns "pending-approval", tell the customer their request is with a
+   manager and that they will be notified — then STOP. Do not wait, do not guess the
+   outcome. The customer can keep chatting; the manager's decision arrives on its own.
 
 TONE
 Warm, concise, plain language. Summarise technical detail. Never show raw JSON.
 Never state that a refund is approved, issued, or on its way unless the refund
-workflow said so.
+workflow said so, OR you receive an ops-console notification about it (below).
+
+REFUND NOTIFICATIONS (authoritative)
+A notification whose source is "ops-console" and kind is "refund-approved" or
+"refund-declined" IS the refund workflow's recorded outcome — it is emitted by
+the system only after a manager decision and a real database write. Treat it as
+fact, not as a customer claim. When one arrives:
+- refund-approved: tell the customer their refund is approved and processed, and
+  give them the refund ID from the notification. Do NOT call it "pending".
+- refund-declined: tell the customer it was declined, relay the manager's note if
+  present, and offer next steps.
+Do not second-guess or "re-verify" an ops-console notification; there is no other
+source of truth to check it against.
 
 Demo customers: C001 (Alice, Pro), C002 (Bob, Starter), C003 (Carol, Enterprise).`,
 
   model: () => supportModel(),
 
-  // Native multi-agent: one delegation tool generated per subagent.
-  agents: { triageAgent, billingAgent, technicalAgent, accountAgent },
+  // Native multi-agent: one delegation tool generated per subagent. The model
+  // routes directly — no separate triage agent second-guessing it.
+  agents: { billingAgent, technicalAgent, accountAgent },
 
-  // The HITL gate, reachable as a tool but still a suspendable workflow.
-  workflows: { refundWorkflow },
-
-  // The supervisor's own tool. Verifying identity is not worth a delegation.
-  tools: { lookupCustomer: lookupCustomerTool },
+  // The supervisor's own tools. Identity lookup is not worth a delegation, and
+  // the refund gate is a NON-BLOCKING tool so a suspended approval never freezes
+  // the conversation (see tools/request-refund-approval.ts).
+  tools: {
+    lookupCustomer: lookupCustomerTool,
+    requestRefundApproval: requestRefundApprovalTool,
+  },
 
   // Reactive guardrail: injects the refund policy mid-run, not just at the door.
   inputProcessors: [refundPolicyProcessor],
@@ -88,6 +104,12 @@ Demo customers: C001 (Alice, Pro), C002 (Bob, Starter), C003 (Carol, Enterprise)
       lastMessages: 40,
       workingMemory: {
         enabled: true,
+        // Scope to the THREAD, not the resource. The default is 'resource',
+        // which shares one working-memory block across every thread for the
+        // same customer — so a second chat inherits the first chat's context
+        // and they bleed into each other. 'thread' keeps each chat isolated,
+        // which is also what the workshop claims ("threads are isolated").
+        scope: "thread",
         template: `<customer_context>
   <customerId></customerId>
   <name></name>
@@ -109,8 +131,10 @@ Demo customers: C001 (Alice, Pro), C002 (Bob, Starter), C003 (Carol, Enterprise)
      * its way past them — which is the whole point of putting them here rather
      * than in the instructions above.
      *
-     * `primitiveType` is 'agent' | 'workflow', so one hook guards both the
-     * specialist delegations and the refund workflow.
+     * These guard the specialist delegations. The refund path is a tool, not a
+     * delegation, so it enforces its own customer-ID check inside
+     * request-refund-approval — least authority at whichever boundary the risk
+     * actually crosses.
      */
     delegation: {
       onDelegationStart: async (context) => {
@@ -123,17 +147,16 @@ Demo customers: C001 (Alice, Pro), C002 (Bob, Starter), C003 (Carol, Enterprise)
           };
         }
 
-        // No refund may be attempted without an identified customer, no matter
-        // what the conversation claims.
-        const needsCustomer =
-          context.primitiveId === "refund-workflow" ||
-          context.primitiveId === "billing-agent";
-
-        if (needsCustomer && !/\bC\d{3,}\b/.test(context.prompt)) {
+        // No billing work without an identified customer, no matter what the
+        // conversation claims.
+        if (
+          context.primitiveId === "billing-agent" &&
+          !/\bC\d{3,}\b/.test(context.prompt)
+        ) {
           return {
             proceed: false,
             rejectionReason:
-              "No valid customer ID (format C001) in the delegation prompt. Ask the customer for their ID before delegating billing or refund work.",
+              "No valid customer ID (format C001) in the delegation prompt. Ask the customer for their ID before delegating billing work.",
           };
         }
 

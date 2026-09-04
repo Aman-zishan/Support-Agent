@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { processRefund } from "../tools";
+import { notifyRefundDecision } from "../signals/notifier";
 
 /**
  * The refund approval gate, extracted so that BOTH paths reach the same
@@ -22,6 +23,14 @@ export const refundDecisionInputSchema = z.object({
   reason: z.string(),
   /** The specialist's message to the customer, carried through to the final response. */
   agentResponse: z.string(),
+  /**
+   * The chat thread that requested this refund, captured by the
+   * request-refund-approval tool from the agent's execution context. When the
+   * run resumes, the step wakes THIS thread so the agent tells the customer.
+   * Absent on the deterministic workflow path (no chat to wake).
+   */
+  notifyThreadId: z.string().optional(),
+  notifyResourceId: z.string().optional(),
 });
 
 export const refundDecisionOutputSchema = z.object({
@@ -64,7 +73,31 @@ export async function executeRefundApproval({
   resumeData?: z.infer<typeof refundResumeSchema>;
   suspend: SuspendFn;
 }): Promise<z.infer<typeof refundDecisionOutputSchema>> {
-  const { customerId, orderId, refundAmount, reason, agentResponse } = inputData;
+  const {
+    customerId,
+    orderId,
+    refundAmount,
+    reason,
+    agentResponse,
+    notifyThreadId,
+    notifyResourceId,
+  } = inputData;
+
+  // Wake the originating chat thread, if this refund came from one. No-op on the
+  // deterministic path (no thread) or when nothing is wired.
+  const wakeChat = async (approved: boolean, refundId?: string, managerNote?: string) => {
+    if (notifyThreadId && notifyResourceId && orderId && refundAmount) {
+      await notifyRefundDecision({
+        threadId: notifyThreadId,
+        resourceId: notifyResourceId,
+        approved,
+        orderId,
+        amount: refundAmount,
+        refundId,
+        managerNote,
+      });
+    }
+  };
 
   // Nothing to approve — pass the specialist's answer straight through.
   if (!refundAmount || !orderId) {
@@ -111,6 +144,7 @@ export async function executeRefundApproval({
   const { approved, managerNote } = resumeData;
 
   if (!approved) {
+    await wakeChat(false, undefined, managerNote);
     return {
       finalResponse: `${agentResponse}\n\nRefund of $${refundAmount} was declined by manager. Note: ${managerNote || "No note provided."}`,
       action: "refund-declined",
@@ -127,6 +161,7 @@ export async function executeRefundApproval({
     // Goes into the refunds row, so the audit trail records WHO decided and why.
     managerNote,
   });
+  await wakeChat(true, result.refundId, managerNote);
   return {
     finalResponse: `${agentResponse}\n\n${
       result.created

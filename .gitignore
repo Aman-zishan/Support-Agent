@@ -15,7 +15,11 @@ support.db-wal
 *.png
 !qr-linkedin.png
 !image.png
+!repo-qr.png
 
 # Business data (regenerated + seeded on first run)
 support-data.db
 support-data.db-*
+
+# Presenter-only
+SPEAKER-NOTES.md

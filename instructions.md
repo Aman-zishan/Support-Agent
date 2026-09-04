@@ -83,9 +83,9 @@ deterministic workflow, 8–9 the supervisor, 10 the signals, 11 idempotency, an
 Send: `Hi, I'm C001. I was charged twice for my subscription this month.`
 
 **Show:**
-- the supervisor calling `agent-billingAgent` (and `agent-triageAgent` if the ticket is ambiguous) — these tools were *generated* from the `agents: {}` config, not written by hand
+- the supervisor calling `agent-billingAgent` — generated from the `agents: {}` config, not written by hand. It routes directly; there is no separate triage agent in the supervisor (triage lives in the deterministic `supportWorkflow` only)
 - the billing agent's own tool calls nested underneath
-- the supervisor calling `workflow-refundWorkflow` for the refund
+- the supervisor calling the `request-refund-approval` tool for the refund
 - open `agents/supervisor.ts` and show there is no `if/else` router anywhere
 
 **Contrast:** `git show HEAD~1:src/mastra/tools/route-ticket.ts` — the hand-rolled version this replaced.
@@ -94,9 +94,19 @@ Send: `Hi, I'm C001. I was charged twice for my subscription this month.`
 
 Send: `I want a refund on my last order.` (deliberately **no** customer ID)
 
-**Show:** `onDelegationStart` refuses to delegate to billing or the refund workflow without a `C###` in the prompt, and hands the model a `rejectionReason` instead. The supervisor asks for the ID.
+**Show:** `onDelegationStart` refuses to delegate to billing without a `C###` in the prompt, and the `request-refund-approval` tool rejects for the same reason inside itself — least authority at whichever boundary the risk crosses. The supervisor asks for the ID.
 
 **Say:** the instructions *ask* the model to collect an ID. The hook *enforces* it, in TypeScript, where the model cannot argue.
+
+### 9b. A big refund does NOT freeze the chat
+
+Send (as `C003`): `I need a refund of $897 for ORD-3002 after my Enterprise downgrade.`
+
+**Show:** the supervisor calls `request-refund-approval`; it returns `status: "pending-approval"` with a `runId` and the supervisor tells the customer it is with a manager — **then the turn ends and you can keep typing.** The suspended run is visible under Studio → Workflows → `refundWorkflow` (resume it there with `{ approved: true }`).
+
+**Why this matters:** the refund gate is a *non-blocking* tool, not an inline workflow. If we had registered `refundWorkflow` directly on the agent, its `suspend()` would suspend the whole agent run and the customer could not text — which is exactly what signals exist to avoid. The `$50` threshold lives in `refund-approval.ts` (code), never in the prompt; the model only decides to *call* the tool.
+
+To see the manager's approval *wake the conversation* end-to-end (the agent speaking unprompted), run the script below — it owns the `threadId`, so it can target the notification signal at the right thread.
 
 ---
 
@@ -183,7 +193,7 @@ Studio's agent chat has threads and memory built in — no separate UI needed.
 1. `Hi, I need help with my billing` → the supervisor asks for a customer ID
 2. `C001`
 3. `I was charged twice for my subscription` → watch `agent-billingAgent` then
-   `workflow-refundWorkflow` appear as tool calls
+   the `request-refund-approval` tool appear as tool calls
 4. `What did we just do?` → it remembers, from working memory + last messages
 5. Click **New thread** → `What was my issue?` → it does not know. No context bleed.
 
