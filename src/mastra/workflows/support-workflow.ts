@@ -73,7 +73,10 @@ const triageOutputSchema = z.object({
 
 const specialistOutputSchema = z.object({
   response: z.string(),
-  action: z.enum(["refund", "escalate", "resolved", "info_needed"]),
+  // "close_account" is what the account agent returns when a customer asks to
+  // close; on this deterministic path there is no closure tool, so the step
+  // maps it to "escalate" (a manager handles it).
+  action: z.enum(["refund", "escalate", "resolved", "info_needed", "close_account"]),
   refundAmount: z.number().nullable().optional(),
   orderId: z.string().nullable().optional(),
   customerId: z.string().nullable().optional(),
@@ -238,24 +241,22 @@ const triageStep = createStep({
       };
     }
 
+    // Structured output: the schema is enforced by Mastra, not by JSON.parse
+    // with a fallback. The old fallback routed unparseable responses to
+    // "billing" / "medium" — a silent misroute. Now a malformed response is
+    // an error on this step, which is what you want: fail loudly, in the
+    // step that owns the decision. `jsonPromptInjection` puts the schema in
+    // the prompt for providers without native JSON-schema output.
     const result = await triageAgent.generate(
       `Classify this support ticket for customer ${inputData.customerId}:\n\n${inputData.ticketContent}`,
-      {}
+      {
+        structuredOutput: {
+          schema: triageOutputSchema,
+          jsonPromptInjection: true,
+        },
+      }
     );
-
-    let parsed: z.infer<typeof triageOutputSchema>;
-    try {
-      const text = result.text.trim();
-      parsed = JSON.parse(text);
-    } catch {
-      // Fallback if JSON parsing fails
-      parsed = {
-        category: "billing",
-        priority: "medium",
-        summary: "Could not parse triage response",
-        reasoning: result.text,
-      };
-    }
+    const parsed: z.infer<typeof triageOutputSchema> = result.object;
 
     return {
       ...parsed,
@@ -315,18 +316,29 @@ const specialistStep = createStep({
     const prompt = `Customer ID: ${inputData.customerId}\nTicket: ${inputData.ticketContent}\nSummary: ${inputData.summary}`;
     let parsed: z.infer<typeof specialistOutputSchema>;
 
+    // Schema-checked output. Before, `JSON.parse(result.text)` threw the moment
+    // a specialist prefixed its JSON with a sentence ("I'll look into that…"),
+    // and the catch below turned a perfectly good answer into an escalation.
+    // Specialists call tools first, so instead of Mastra's structured-output
+    // pass (which is built for single-shot answers) we take the JSON object out
+    // of the final text and validate it with the Zod schema. A response that
+    // fails the schema still lands in the catch — escalate to a human — but a
+    // prose prefix no longer does.
     const generateSpecialist = async () => {
-      let result;
-      if (inputData.category === "billing") {
-        result = await billingAgent.generate(prompt);
-      } else if (inputData.category === "technical") {
-        result = await technicalAgent.generate(prompt);
-      } else {
-        result = await accountAgent.generate(prompt);
+      const agent =
+        inputData.category === "billing"
+          ? billingAgent
+          : inputData.category === "technical"
+            ? technicalAgent
+            : accountAgent;
+      const result = await agent.generate(prompt);
+      const text = result.text;
+      const start = text.indexOf("{");
+      const end = text.lastIndexOf("}");
+      if (start === -1 || end <= start) {
+        throw new Error(`Specialist returned no JSON object: ${text.slice(0, 120)}`);
       }
-      return JSON.parse(result.text.trim()) as z.infer<
-        typeof specialistOutputSchema
-      >;
+      return specialistOutputSchema.parse(JSON.parse(text.slice(start, end + 1)));
     };
 
     try {
@@ -352,11 +364,14 @@ const specialistStep = createStep({
       };
     }
 
-    // If the agent found a refund amount and order, ensure action is "refund"
+    // If the agent found a refund amount and order, ensure action is "refund".
+    // A closure request has no tool on this path: hand it to a human.
     const action =
       parsed.refundAmount && parsed.orderId
         ? ("refund" as const)
-        : parsed.action;
+        : parsed.action === "close_account"
+          ? ("escalate" as const)
+          : parsed.action;
 
     return {
       ...parsed,

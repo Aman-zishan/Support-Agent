@@ -4,11 +4,12 @@ import { supportModel } from "../model";
 export const triageAgent = new Agent({
   id: "triage-agent",
   name: "Triage Agent",
-  // `description` is what the supervisor's model reads to decide whether to
-  // delegate here. Without it, the generated `agent-triage` tool has no
-  // description and the supervisor delegates blindly.
+  // Not a subagent of the supervisor (the supervisor routes directly). This
+  // agent is the classifier behind the deterministic supportWorkflow's triage
+  // step. `description` is shown in Studio and, if you ever do register it on
+  // an agent's `agents: {}`, becomes the generated delegation tool's description.
   description:
-    "Classifies a support ticket into billing, technical, or account, and assigns a priority. Has no tools and takes no action — call this first when the right specialist is not obvious.",
+    "Classifies a support ticket into billing, technical, or account, and assigns a priority. Has no tools and takes no action. Used by the support workflow's triage step.",
   instructions: `You are a customer support triage agent.
 Your job is to classify incoming support tickets into exactly one category:
 - "billing" -- invoices, payments, refunds, plan changes, pricing

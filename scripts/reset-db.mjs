@@ -6,7 +6,7 @@
  *
  * Wipes both SQLite files (and their WAL/SHM sidecars) wherever they live:
  *   support.db        Mastra's: memory, suspended runs, signals, traces
- *   support-data.db   yours:     customers, orders, refunds
+ *   support-data.db   yours:     customers, orders, refunds, account closures
  *
  * The app reseeds support-data.db lazily on the next lookup (3 customers, 5
  * orders, 0 refunds), so there is nothing to re-create here. If `npm run dev`
@@ -37,5 +37,5 @@ for (const dir of dirs) {
 }
 
 console.log("✓ Databases reset — support.db and support-data.db wiped.");
-console.log("  Next lookup reseeds support-data.db: 3 customers, 5 orders, 0 refunds.");
+console.log("  Next lookup reseeds support-data.db: 3 customers, 5 orders, 0 refunds, 0 closures.");
 console.log("  If `npm run dev` is running, restart it to load the fresh files.");

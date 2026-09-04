@@ -133,7 +133,9 @@ export async function processRefund(input: {
     };
   }
 
-  const refundId = `REF-${Date.now()}`;
+  // Base-36, not a 13-digit run: a long digit string reads as a card number to
+  // the output PII redactor, which would mask the refund ID in the reply.
+  const refundId = `REF-${Date.now().toString(36).toUpperCase()}`;
   const createdAt = new Date().toISOString();
 
   try {

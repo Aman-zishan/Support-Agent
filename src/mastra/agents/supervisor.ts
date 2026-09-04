@@ -7,6 +7,9 @@ import { accountAgent } from "./account";
 import { refundPolicyProcessor } from "../processors/refund-policy";
 import { lookupCustomerTool } from "../tools";
 import { requestRefundApprovalTool } from "../tools/request-refund-approval";
+import { closeAccountTool } from "../tools/close-account";
+import type { ToolsInput } from "@mastra/core/agent";
+import { PIIDetector } from "@mastra/core/processors";
 
 /**
  * THE SUPERVISOR — native Mastra multi-agent coordination.
@@ -32,6 +35,27 @@ import { requestRefundApprovalTool } from "../tools/request-refund-approval";
 
 const MAX_DELEGATIONS = 8;
 
+/**
+ * PII redaction on the way OUT. The support workflow redacts PII on input so
+ * specialists and traces never see a raw card number. Nothing stopped the
+ * supervisor echoing one back to the customer, or into the chat log, until now.
+ * Same processor, other side of the model. Built lazily so a missing API key
+ * does not stop the dev server from booting.
+ */
+let _outputPii: PIIDetector | undefined;
+function outputPiiRedactor() {
+  return (_outputPii ??= new PIIDetector({
+    model: supportModel(),
+    detectionTypes: ["email", "phone", "credit-card", "ssn"],
+    threshold: 0.6,
+    strategy: "redact",
+    redactionMethod: "mask",
+    instructions:
+      "Detect and mask PII in the assistant's reply to a customer: payment card numbers, SSNs, phone numbers, email addresses. Keep the rest of the reply intact. Internal reference IDs are NOT PII and must be left exactly as written: customer IDs like C001, order IDs like ORD-1001, refund IDs like REF-M8Q1X2ZK, closure IDs like CLS-M8Q1X2ZK, run IDs (UUIDs).",
+    structuredOutputOptions: { jsonPromptInjection: true },
+  }));
+}
+
 /** Cheap PII scrub applied to anything forwarded to a subagent. */
 const CARD_OR_SSN = /\b(?:\d[ -]*?){13,16}\b|\b\d{3}-\d{2}-\d{4}\b/g;
 
@@ -39,7 +63,7 @@ export const supportSupervisorAgent = new Agent({
   id: "support-supervisor",
   name: "Support Supervisor",
   description:
-    "Front-line support coordinator. Delegates to triage and specialist agents and runs the refund approval workflow.",
+    "Front-line support coordinator. Routes tickets to the billing, technical and account specialists and requests refund approval through the non-blocking refund gate.",
 
   instructions: `You are the support desk coordinator for our SaaS platform. You never
 solve tickets yourself — you delegate to specialists and relay their answers.
@@ -50,6 +74,9 @@ WHO YOU HAVE
 - agent-accountAgent   passwords, logins, plan changes, profile and closure requests.
 - request-refund-approval  the ONLY way a refund happens. <= $50 settles at once;
   over $50 it returns "pending-approval" and a manager decides out of band.
+- closeAccount  (only present in some sessions) the ONLY way an account is closed.
+  Every call pauses for a human to approve. If you do not have this tool, you
+  cannot close accounts in this session.
 
 HOW TO WORK
 1. Collect the customer ID first (format C001, C002, C003). Do not delegate without one.
@@ -62,6 +89,11 @@ HOW TO WORK
 5. If the tool returns "pending-approval", tell the customer their request is with a
    manager and that they will be notified — then STOP. Do not wait, do not guess the
    outcome. The customer can keep chatting; the manager's decision arrives on its own.
+6. If the account specialist returns action "close_account": when you have the
+   closeAccount tool, call it with the customerId and the specialist's "reason", and
+   report exactly what it returns (status "closed" with the closure ID, or
+   "already-closed"). When you do NOT have the tool, tell the customer a manager will
+   handle the closure and follow up. Never claim an account is closed otherwise.
 
 TONE
 Warm, concise, plain language. Summarise technical detail. Never show raw JSON.
@@ -91,13 +123,29 @@ Demo customers: C001 (Alice, Pro), C002 (Bob, Starter), C003 (Carol, Enterprise)
   // The supervisor's own tools. Identity lookup is not worth a delegation, and
   // the refund gate is a NON-BLOCKING tool so a suspended approval never freezes
   // the conversation (see tools/request-refund-approval.ts).
-  tools: {
-    lookupCustomer: lookupCustomerTool,
-    requestRefundApproval: requestRefundApprovalTool,
+  //
+  // The tool list is a FUNCTION of the request context: least authority per
+  // principal. `closeAccount` (requireApproval: true) exists only when the caller
+  // is a manager — in Studio, set { "role": "manager" } under Request Context.
+  // Without it the model has no closure tool to call, whatever the chat says.
+  // It sits here rather than on the account agent for the same reason refunds do:
+  // specialists recommend, the coordinator holds the gated tool. (Approving a
+  // tool call nested inside a delegation is not resumable from Studio in this
+  // Mastra version; a first-level tool call is.)
+  tools: ({ requestContext }): ToolsInput => {
+    const tools: ToolsInput = {
+      lookupCustomer: lookupCustomerTool,
+      requestRefundApproval: requestRefundApprovalTool,
+    };
+    if (requestContext.get("role") === "manager") tools.closeAccount = closeAccountTool;
+    return tools;
   },
 
   // Reactive guardrail: injects the refund policy mid-run, not just at the door.
   inputProcessors: [refundPolicyProcessor],
+
+  // Output guardrail: the reply is scanned and masked before the customer sees it.
+  outputProcessors: () => [outputPiiRedactor()],
 
   memory: new Memory({
     options: {

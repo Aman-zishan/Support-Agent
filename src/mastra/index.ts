@@ -8,6 +8,8 @@ import { accountAgent } from './agents/account';
 import { supportSupervisorAgent } from './agents/supervisor';
 import { supportWorkflow } from './workflows/support-workflow';
 import { refundWorkflow } from './workflows/refund-workflow';
+import { injectionCheckWorkflow } from './workflows/injection-check';
+import { injectionVerdictScorer } from './evals/injection-scorer';
 import { Observability, DefaultExporter } from '@mastra/observability';
 import { describeModel } from './model';
 import { setRefundNotifier } from './signals/notifier';
@@ -44,7 +46,11 @@ export const mastra = new Mastra({
 	workflows: {
 		supportWorkflow,
 		refundWorkflow,
+		// Homework instrument: run the injection detector on one ticket, from Studio.
+		injectionCheckWorkflow,
 	},
+	// Visible under Studio → Scorers. Used by `npm run eval:injection`.
+	scorers: { injectionVerdictScorer },
 	storage,
 	observability: new Observability({
 		configs: {

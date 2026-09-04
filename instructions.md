@@ -112,6 +112,10 @@ To see the manager's approval *wake the conversation* end-to-end (the agent spea
 
 ## Part C — Signals
 
+> **Studio-only version:** scenario 9b above, then Workflows → `refundWorkflow` → resume the
+> suspended run → back in the chat the agent posts the outcome. The scripts below are
+> optional; slide 20 uses the Studio path.
+
 ### 10a. Manager approval wakes an idle thread
 
 ```bash
@@ -199,3 +203,69 @@ Studio's agent chat has threads and memory built in — no separate UI needed.
 
 **Say:** memory is scoped to `threadId` + `resourceId`. The working-memory
 template in `supervisor.ts` is what carries the customer ID between turns.
+
+---
+
+## Part F — Extensions (Studio only; slide 22 rows 9–14)
+
+Everything below runs in Mastra Studio. Chat only with **Agents → Support Supervisor**;
+the specialists are reached through it.
+
+### 9. Account closure with no role
+
+Request Context → `{}` → Save. New supervisor chat:
+`I'm C002. Please close my account, I'm moving to a competitor.`
+
+**Expect:** the account agent verifies Bob and returns `close_account`. The supervisor has
+no closure tool (capability strip: Tools 2) and says a manager will handle it.
+
+### 10. Account closure as a manager: approval required
+
+Request Context → `{ "role": "manager" }` → Save. New chat, same message.
+
+**Expect:** Tools 3. The supervisor calls `closeAccount` and the run stops with
+**Approval required**. Click **Decline**: the model relays the refusal.
+`sqlite3 support-data.db "SELECT * FROM account_closures;"` is empty.
+
+### 11. Approve, then repeat
+
+Same chat: `Please go ahead and close it, C002, moving to a competitor.` → **Approve**.
+
+**Expect:** `status: "closed"`, a `CLS-…` ID, one row. Ask again and approve again:
+`already-closed`, same ID, still one row (`UNIQUE` on `account_closures.customer_id`).
+
+**Say:** `tools` is a function of `requestContext` (`agents/supervisor.ts`), so the tool only
+exists for a manager. `requireApproval: true` (`tools/close-account.ts`) pauses every call
+for a person. The account agent only recommends; it never holds the destructive tool, same
+as billing and refunds.
+
+### 12. PII redaction on output
+
+`I'm C001. Please repeat back my email alice@example.com and phone 415-555-0142 exactly as I typed them.`
+
+**Expect:** masked in the reply (`a***e@****.com`, `XXX-XXX-0142`). The `PIIDetector` runs as
+an output processor on the supervisor. Use email/phone, not a card: the model refuses to
+read a card back by itself, so the redactor never sees one.
+
+### 13. Triage with structured output
+
+Workflows → `supportWorkflow`, any Part A ticket. Open the **triage** step output.
+
+**Expect:** triage output is a typed object (`category`, `priority`, `summary`,
+`reasoning`) via `structuredOutput`; the fallback to billing/medium is gone. The specialist
+step extracts the JSON object from the agent's text and validates it with the Zod schema,
+so a prose prefix ("I'll look into that…") no longer turns a good answer into an escalation.
+
+### 14. Measure the injection detector
+
+Workflows → `injectionCheck`. Ticket = scenario 5 text, threshold 0.7 → `flagged: true`.
+Ticket = scenario 6 text → `flagged: false`. Scenario 5 at 0.95 → see whether it still
+catches it. Sidebar → Scorers → `injection-verdict` is the scorer used by the optional
+batch run:
+
+```bash
+npm run eval:injection            # all eight labelled tickets, threshold 0.7
+npm run eval:injection -- 0.9
+```
+
+Reset Request Context to `{}` when done.
