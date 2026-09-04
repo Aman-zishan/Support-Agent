@@ -73,10 +73,7 @@ const triageOutputSchema = z.object({
 
 const specialistOutputSchema = z.object({
   response: z.string(),
-  // "close_account" is what the account agent returns when a customer asks to
-  // close; on this deterministic path there is no closure tool, so the step
-  // maps it to "escalate" (a manager handles it).
-  action: z.enum(["refund", "escalate", "resolved", "info_needed", "close_account"]),
+  action: z.enum(["refund", "escalate", "resolved", "info_needed"]),
   refundAmount: z.number().nullable().optional(),
   orderId: z.string().nullable().optional(),
   customerId: z.string().nullable().optional(),
@@ -122,9 +119,11 @@ const validateTicketStep = createStep({
     }
 
     // ── LLM-based prompt injection detection (Mastra PromptInjectionDetector) ──
-    // NOTE: Commented out for workshop stability — the LLM guard can be overly
-    // aggressive with Groq models, flagging legitimate refund requests as injection.
-    // In production, tune the threshold or use a dedicated guard model (e.g. OpenAI).
+    // NOTE: Commented out on purpose. On the open-weight model this workshop was
+    // first built on, threshold 0.7 flagged legitimate refund requests; on Anthropic
+    // the same detector passed all eight labelled tickets (see workflows/injection-check.ts
+    // and `npm run eval:injection`). The false-positive rate is a property of provider
+    // and threshold together — measure it on yours before turning this on.
     //
     // let injectionBlocked = false;
     // try {
@@ -364,14 +363,11 @@ const specialistStep = createStep({
       };
     }
 
-    // If the agent found a refund amount and order, ensure action is "refund".
-    // A closure request has no tool on this path: hand it to a human.
+    // If the agent found a refund amount and order, ensure action is "refund"
     const action =
       parsed.refundAmount && parsed.orderId
         ? ("refund" as const)
-        : parsed.action === "close_account"
-          ? ("escalate" as const)
-          : parsed.action;
+        : parsed.action;
 
     return {
       ...parsed,

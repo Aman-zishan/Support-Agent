@@ -7,7 +7,7 @@ import { createClient } from "@libsql/client";
  * memory, workflow snapshots and traces. Two files, two owners:
  *
  *   support.db        Mastra's:  memory, suspended runs, signals, traces
- *   support-data.db   yours:     customers, orders, refunds, account closures
+ *   support-data.db   yours:     customers, orders, refunds
  *
  * The tools below do real queries against real rows. That matters for the
  * workshop: an agent whose tools return a hardcoded object literal never shows
@@ -31,13 +31,6 @@ export type Order = {
 	date: string;
 	status: string;
 	item: string;
-};
-
-export type AccountClosure = {
-	id: string;
-	customer_id: string;
-	reason: string;
-	closed_at: string;
 };
 
 export type Refund = {
@@ -79,18 +72,6 @@ const SCHEMA = [
 		reason       TEXT NOT NULL,
 		manager_note TEXT,
 		created_at   TEXT NOT NULL
-	)`,
-	/**
-	 * Account closures. Same pattern as refunds: `customer_id` is UNIQUE, so a
-	 * retried or duplicated close-account call cannot close (or log) twice.
-	 * Additive table rather than a `status` column on customers, so existing
-	 * support-data.db files keep working without a migration.
-	 */
-	`CREATE TABLE IF NOT EXISTS account_closures (
-		id          TEXT PRIMARY KEY,
-		customer_id TEXT NOT NULL UNIQUE REFERENCES customers(id),
-		reason      TEXT NOT NULL,
-		closed_at   TEXT NOT NULL
 	)`,
 ];
 
@@ -171,48 +152,4 @@ export async function findRefundByOrder(orderId: string): Promise<Refund | null>
 		args: [orderId],
 	});
 	return (rows[0] as unknown as Refund) ?? null;
-}
-
-export async function findClosure(customerId: string): Promise<AccountClosure | null> {
-	await initDb();
-	const { rows } = await db.execute({
-		sql: "SELECT id, customer_id, reason, closed_at FROM account_closures WHERE customer_id = ?",
-		args: [customerId],
-	});
-	return (rows[0] as unknown as AccountClosure) ?? null;
-}
-
-/**
- * Record an account closure. IDEMPOTENT via the UNIQUE constraint on
- * `customer_id`: a retry, a duplicated tool call, or two racing approvals all
- * resolve to one closure row, and the second caller gets the first caller's
- * row back with `created: false`.
- */
-export async function closeAccountRecord(
-	customerId: string,
-	reason: string,
-): Promise<{ created: boolean; closure: AccountClosure }> {
-	await initDb();
-	const existing = await findClosure(customerId);
-	if (existing) return { created: false, closure: existing };
-
-	const closure: AccountClosure = {
-		// Base-36 for the same reason as refund IDs: no digit run the PII redactor mistakes for a card.
-		id: `CLS-${Date.now().toString(36).toUpperCase()}`,
-		customer_id: customerId,
-		reason,
-		closed_at: new Date().toISOString(),
-	};
-	try {
-		await db.execute({
-			sql: "INSERT INTO account_closures (id, customer_id, reason, closed_at) VALUES (?, ?, ?, ?)",
-			args: [closure.id, closure.customer_id, closure.reason, closure.closed_at],
-		});
-	} catch (err) {
-		// Lost a race on UNIQUE — the other caller's closure stands.
-		const winner = await findClosure(customerId);
-		if (winner) return { created: false, closure: winner };
-		throw err;
-	}
-	return { created: true, closure };
 }

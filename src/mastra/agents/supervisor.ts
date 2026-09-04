@@ -7,8 +7,6 @@ import { accountAgent } from "./account";
 import { refundPolicyProcessor } from "../processors/refund-policy";
 import { lookupCustomerTool } from "../tools";
 import { requestRefundApprovalTool } from "../tools/request-refund-approval";
-import { closeAccountTool } from "../tools/close-account";
-import type { ToolsInput } from "@mastra/core/agent";
 import { PIIDetector } from "@mastra/core/processors";
 
 /**
@@ -42,6 +40,21 @@ const MAX_DELEGATIONS = 8;
  * Same processor, other side of the model. Built lazily so a missing API key
  * does not stop the dev server from booting.
  */
+let _inputPii: PIIDetector | undefined;
+/** Redact PII in the customer's message BEFORE the model, memory, subagents or traces see it. */
+function inputPiiRedactor() {
+  return (_inputPii ??= new PIIDetector({
+    model: supportModel(),
+    detectionTypes: ["credit-card", "ssn"],
+    threshold: 0.6,
+    strategy: "redact",
+    redactionMethod: "mask",
+    instructions:
+      "Detect and mask payment card numbers and SSNs in a customer support message. Leave everything else untouched, including customer IDs like C001, order IDs like ORD-1001, email addresses and phone numbers.",
+    structuredOutputOptions: { jsonPromptInjection: true },
+  }));
+}
+
 let _outputPii: PIIDetector | undefined;
 function outputPiiRedactor() {
   return (_outputPii ??= new PIIDetector({
@@ -51,7 +64,7 @@ function outputPiiRedactor() {
     strategy: "redact",
     redactionMethod: "mask",
     instructions:
-      "Detect and mask PII in the assistant's reply to a customer: payment card numbers, SSNs, phone numbers, email addresses. Keep the rest of the reply intact. Internal reference IDs are NOT PII and must be left exactly as written: customer IDs like C001, order IDs like ORD-1001, refund IDs like REF-M8Q1X2ZK, closure IDs like CLS-M8Q1X2ZK, run IDs (UUIDs).",
+      "Detect and mask PII in the assistant's reply to a customer: payment card numbers, SSNs, phone numbers, email addresses. Keep the rest of the reply intact. Internal reference IDs are NOT PII and must be left exactly as written: customer IDs like C001, order IDs like ORD-1001, refund IDs like REF-M8Q1X2ZK, run IDs (UUIDs).",
     structuredOutputOptions: { jsonPromptInjection: true },
   }));
 }
@@ -74,9 +87,6 @@ WHO YOU HAVE
 - agent-accountAgent   passwords, logins, plan changes, profile and closure requests.
 - request-refund-approval  the ONLY way a refund happens. <= $50 settles at once;
   over $50 it returns "pending-approval" and a manager decides out of band.
-- closeAccount  (only present in some sessions) the ONLY way an account is closed.
-  Every call pauses for a human to approve. If you do not have this tool, you
-  cannot close accounts in this session.
 
 HOW TO WORK
 1. Collect the customer ID first (format C001, C002, C003). Do not delegate without one.
@@ -89,11 +99,6 @@ HOW TO WORK
 5. If the tool returns "pending-approval", tell the customer their request is with a
    manager and that they will be notified — then STOP. Do not wait, do not guess the
    outcome. The customer can keep chatting; the manager's decision arrives on its own.
-6. If the account specialist returns action "close_account": when you have the
-   closeAccount tool, call it with the customerId and the specialist's "reason", and
-   report exactly what it returns (status "closed" with the closure ID, or
-   "already-closed"). When you do NOT have the tool, tell the customer a manager will
-   handle the closure and follow up. Never claim an account is closed otherwise.
 
 TONE
 Warm, concise, plain language. Summarise technical detail. Never show raw JSON.
@@ -123,26 +128,14 @@ Demo customers: C001 (Alice, Pro), C002 (Bob, Starter), C003 (Carol, Enterprise)
   // The supervisor's own tools. Identity lookup is not worth a delegation, and
   // the refund gate is a NON-BLOCKING tool so a suspended approval never freezes
   // the conversation (see tools/request-refund-approval.ts).
-  //
-  // The tool list is a FUNCTION of the request context: least authority per
-  // principal. `closeAccount` (requireApproval: true) exists only when the caller
-  // is a manager — in Studio, set { "role": "manager" } under Request Context.
-  // Without it the model has no closure tool to call, whatever the chat says.
-  // It sits here rather than on the account agent for the same reason refunds do:
-  // specialists recommend, the coordinator holds the gated tool. (Approving a
-  // tool call nested inside a delegation is not resumable from Studio in this
-  // Mastra version; a first-level tool call is.)
-  tools: ({ requestContext }): ToolsInput => {
-    const tools: ToolsInput = {
-      lookupCustomer: lookupCustomerTool,
-      requestRefundApproval: requestRefundApprovalTool,
-    };
-    if (requestContext.get("role") === "manager") tools.closeAccount = closeAccountTool;
-    return tools;
+  tools: {
+    lookupCustomer: lookupCustomerTool,
+    requestRefundApproval: requestRefundApprovalTool,
   },
 
-  // Reactive guardrail: injects the refund policy mid-run, not just at the door.
-  inputProcessors: [refundPolicyProcessor],
+  // Input guardrails: mask card numbers and SSNs before anything downstream sees
+  // them, then the reactive refund-policy signal. Order matters: redaction first.
+  inputProcessors: () => [inputPiiRedactor(), refundPolicyProcessor],
 
   // Output guardrail: the reply is scanned and masked before the customer sees it.
   outputProcessors: () => [outputPiiRedactor()],

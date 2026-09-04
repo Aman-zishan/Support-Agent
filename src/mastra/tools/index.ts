@@ -85,7 +85,7 @@ export async function getOrders(customerId: string) {
   return findOrders(customerId);
 }
 
-export type ProcessRefundResult = {
+type ProcessRefundResult = {
   success: boolean;
   refundId: string;
   message: string;
@@ -182,21 +182,3 @@ export async function processRefund(input: {
     created: true,
   };
 }
-
-export const processRefundTool = createTool({
-  id: "process-refund",
-  description:
-    "Process a refund. Use only after human approval for amounts over $50.",
-  inputSchema: z.object({
-    orderId: z.string(),
-    amount: z.number(),
-    reason: z.string(),
-  }),
-  outputSchema: z.object({
-    success: z.boolean(),
-    refundId: z.string(),
-    message: z.string(),
-    created: z.boolean(),
-  }),
-  execute: async (inputData) => processRefund(inputData),
-});

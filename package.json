@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit",
     "db:reset": "node scripts/reset-db.mjs",
     "signal:approval": "tsx src/mastra/signals/manager-approval.ts",
-    "signal:multiplayer": "tsx src/mastra/signals/multiplayer.ts",
     "eval:injection": "tsx src/mastra/evals/injection-eval.ts"
   },
   "dependencies": {

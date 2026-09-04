@@ -30,7 +30,8 @@ AGENTIC PATH — native multi-agent              DETERMINISTIC PATH — workflow
                                          │           → resume()         │
                                          └──────────────┬───────────────┘
                                                         │
-                          sendNotificationSignal() ─────┘
+                          sendNotification
+() ─────┘
                                     │
                      idle thread ───┴──▶ agent wakes, tells the customer
 ```
@@ -92,8 +93,7 @@ The server boots **without** a key too — Studio, the workflow graph and the
 ### Signals demos
 
 ```bash
-npm run signal:approval      # manager approves out-of-band → idle agent wakes and replies
-npm run signal:multiplayer   # customer interrupts mid-run; a rep queues an internal note
+npm run signal:approval      # manager approves out-of-band → idle agent wakes and replies (scripted version of the Studio demo)
 ```
 
 ## Data
@@ -129,8 +129,7 @@ src/mastra/
 ├── processors/
 │   └── refund-policy.ts # reactive-signal guardrail injected mid-run
 ├── signals/
-│   ├── manager-approval.ts  # notification signal wakes an idle thread
-│   └── multiplayer.ts       # sendMessage / queueMessage / subscribeToThread
+│   └── manager-approval.ts  # notification signal wakes an idle thread
 ├── tools/
 │   └── index.ts         # lookupCustomer, getOrderHistory, processRefund (idempotent)
 ├── workflows/

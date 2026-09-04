@@ -14,7 +14,6 @@ support.db-wal
 # Ignore screenshots but keep QR codes and presentation assets
 *.png
 !qr-linkedin.png
-!image.png
 !repo-qr.png
 
 # Business data (regenerated + seeded on first run)
